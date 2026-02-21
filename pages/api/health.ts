@@ -16,7 +16,7 @@ export default async function handler(
       newsEnabled: process.env.NEWS_ENABLED === "true",
       hasNeynarKey: !!process.env.NEYNAR_API_KEY,
       hasSignerUuid: !!process.env.NEYNAR_SIGNER_UUID,
-      hasRedisUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+      hasRedisUrl: !!(process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL),
       hasCronSecret: !!process.env.CRON_SECRET,
     },
   };
