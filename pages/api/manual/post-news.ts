@@ -37,7 +37,7 @@ export default async function handler(
       idem: force ? undefined : `news-${guid}`,
     });
 
-    if (result) {
+    if (result.hash) {
       await markNewsPosted(guid, result.hash);
     }
 
@@ -45,8 +45,9 @@ export default async function handler(
       ok: true,
       text,
       url,
-      posted: !!result,
-      castHash: result?.hash || null,
+      posted: !!result.hash,
+      castHash: result.hash || null,
+      error: result.error || null,
     });
   } catch (err) {
     console.error("[post-news] Error:", err);

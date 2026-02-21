@@ -13,8 +13,14 @@ function getClient(): NeynarAPIClient {
   return client;
 }
 
-interface PostResult {
+export interface PostResult {
   hash: string;
+  error?: undefined;
+}
+
+export interface PostError {
+  hash?: undefined;
+  error: string;
 }
 
 interface PostOptions {
@@ -29,11 +35,11 @@ interface PostOptions {
 export async function postToChannel(
   text: string,
   options: PostOptions = {}
-): Promise<PostResult | null> {
+): Promise<PostResult | PostError> {
   if (process.env.BOT_ENABLED !== "true") {
     console.log("[neynar] BOT_ENABLED is not true, skipping post");
     console.log("[neynar] Would have posted:", text.substring(0, 100) + "...");
-    return null;
+    return { error: "BOT_ENABLED is not true" };
   }
 
   try {
@@ -48,7 +54,8 @@ export async function postToChannel(
     console.log("[neynar] Cast published:", response.cast.hash);
     return { hash: response.cast.hash };
   } catch (err) {
-    console.error("[neynar] Failed to publish cast:", err);
-    return null;
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[neynar] Failed to publish cast:", message);
+    return { error: message };
   }
 }

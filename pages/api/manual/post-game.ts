@@ -42,7 +42,7 @@ export default async function handler(
       idem: force ? undefined : `game-${gamePk}`,
     });
 
-    if (result) {
+    if (result.hash) {
       await markGamePosted(gamePk, result.hash);
     }
 
@@ -51,8 +51,9 @@ export default async function handler(
       gamePk,
       text,
       highlightUrl,
-      posted: !!result,
-      castHash: result?.hash || null,
+      posted: !!result.hash,
+      castHash: result.hash || null,
+      error: result.error || null,
     });
   } catch (err) {
     console.error("[post-game] Error:", err);

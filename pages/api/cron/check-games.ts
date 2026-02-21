@@ -86,11 +86,11 @@ export default async function handler(
         idem: `game-${gamePk}`,
       });
 
-      if (result) {
+      if (result.hash) {
         await markGamePosted(gamePk, result.hash);
         results[`game_${gamePk}`] = `posted: ${result.hash}`;
       } else {
-        results[`game_${gamePk}`] = "post skipped or failed";
+        results[`game_${gamePk}`] = `failed: ${result.error}`;
       }
     }
 

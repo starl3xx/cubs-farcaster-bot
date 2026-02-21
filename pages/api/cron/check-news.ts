@@ -35,11 +35,11 @@ export default async function handler(
         idem: `news-${item.guid}`,
       });
 
-      if (result) {
+      if (result.hash) {
         await markNewsPosted(item.guid, result.hash);
         results[item.guid] = `posted (score: ${item.score}): ${result.hash}`;
       } else {
-        results[item.guid] = `post skipped or failed (score: ${item.score})`;
+        results[item.guid] = `failed (score: ${item.score}): ${result.error}`;
       }
     }
 
