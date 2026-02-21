@@ -95,10 +95,10 @@ export function formatOddsCast(
     `NL Central: ${formatPct(current.nlCentral)}${nlcDelta}`,
   ];
 
+  // Include market URL as text (not embed — Polymarket embeds trigger a broken Frame)
+  lines.push("", marketUrl(CUBS_TOKENS.worldSeries.eventSlug));
+
   const text = lines.join("\n");
 
-  // Embed the World Series market link (will unfurl as a rich card)
-  const embeds = [marketUrl(CUBS_TOKENS.worldSeries.eventSlug)];
-
-  return { text, embeds };
+  return { text, embeds: [] };
 }
