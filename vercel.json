@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/check-news",
       "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/check-odds",
+      "schedule": "0 14 * * 1"
     }
   ]
 }

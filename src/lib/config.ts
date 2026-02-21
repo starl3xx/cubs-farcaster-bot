@@ -11,12 +11,15 @@ export const REDIS_KEYS = {
   GAME_POSTED: "game:", // game:{gamePk} → cast hash
   NEWS_POSTED: "news:", // news:{guid} → cast hash
   GAME_TRACKING: "track:", // track:{gamePk} → retry count
+  ODDS_PREVIOUS: "odds:previous", // previous week's odds snapshot
+  ODDS_POSTED: "odds:posted", // dedup: one odds post per week
 } as const;
 
 export const REDIS_TTL = {
   GAME_POSTED: 60 * 60 * 24 * 30, // 30 days
   NEWS_POSTED: 60 * 60 * 24 * 7, // 7 days
   GAME_TRACKING: 60 * 60 * 24, // 24 hours
+  ODDS: 60 * 60 * 24 * 14, // 14 days (keep 2 weeks for comparison)
 } as const;
 
 // Highlight retry: 12 retries × 5 min interval = 1 hour max wait

@@ -61,6 +61,35 @@ export async function incrementGameTracking(gamePk: number): Promise<number> {
   return count;
 }
 
+// Polymarket odds tracking
+export interface StoredOdds {
+  worldSeries: number;
+  nlCentral: number;
+  timestamp: string;
+}
+
+export async function getPreviousOdds(): Promise<StoredOdds | null> {
+  return getRedis().get<StoredOdds>(REDIS_KEYS.ODDS_PREVIOUS);
+}
+
+export async function saveCurrentOdds(odds: StoredOdds): Promise<void> {
+  await getRedis().set(REDIS_KEYS.ODDS_PREVIOUS, odds, {
+    ex: REDIS_TTL.ODDS,
+  });
+}
+
+export async function isOddsPostedThisWeek(): Promise<boolean> {
+  const result = await getRedis().get(REDIS_KEYS.ODDS_POSTED);
+  return result !== null;
+}
+
+export async function markOddsPosted(castHash: string): Promise<void> {
+  // Expires in 6 days — prevents double-posting within a week
+  await getRedis().set(REDIS_KEYS.ODDS_POSTED, castHash, {
+    ex: 60 * 60 * 24 * 6,
+  });
+}
+
 // Health check
 export async function getRedisStatus(): Promise<{
   connected: boolean;
