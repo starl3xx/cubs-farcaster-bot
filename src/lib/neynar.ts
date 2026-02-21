@@ -2,6 +2,7 @@ import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
 import { CHANNEL_ID } from "./config";
 
 let client: NeynarAPIClient | null = null;
+let channelParentUrl: string | null = null;
 
 function getClient(): NeynarAPIClient {
   if (!client) {
@@ -11,6 +12,23 @@ function getClient(): NeynarAPIClient {
     client = new NeynarAPIClient(config);
   }
   return client;
+}
+
+/**
+ * Look up the channel's protocol-level parent_url via Neynar API.
+ * Cached after first call since it never changes.
+ */
+async function getChannelParentUrl(): Promise<string> {
+  if (channelParentUrl) return channelParentUrl;
+
+  const response = await getClient().lookupChannel({ id: CHANNEL_ID });
+  const url = response.channel.parent_url;
+  if (!url) {
+    throw new Error(`Channel "${CHANNEL_ID}" has no parent_url`);
+  }
+  console.log(`[neynar] Resolved channel "${CHANNEL_ID}" parent_url: ${url}`);
+  channelParentUrl = url;
+  return url;
 }
 
 export interface PostResult {
@@ -30,7 +48,7 @@ interface PostOptions {
 
 /**
  * Post a cast to the /cubs channel.
- * Returns the cast hash on success, or null on failure (never throws).
+ * Uses the channel's protocol-level parent_url to ensure proper routing.
  */
 export async function postToChannel(
   text: string,
@@ -43,9 +61,12 @@ export async function postToChannel(
   }
 
   try {
+    const parentUrl = await getChannelParentUrl();
+
     const response = await getClient().publishCast({
       signerUuid: process.env.NEYNAR_SIGNER_UUID!,
       text,
+      parent: parentUrl,
       channelId: CHANNEL_ID,
       embeds: options.embeds?.map((e) => ({ url: e.url })),
       idem: options.idem,
