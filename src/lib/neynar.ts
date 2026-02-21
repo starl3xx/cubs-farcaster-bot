@@ -43,11 +43,9 @@ export async function postToChannel(
   }
 
   try {
-    const channelUrl = `https://warpcast.com/~/channel/${CHANNEL_ID}`;
     const response = await getClient().publishCast({
       signerUuid: process.env.NEYNAR_SIGNER_UUID!,
       text,
-      parent: channelUrl,
       channelId: CHANNEL_ID,
       embeds: options.embeds?.map((e) => ({ url: e.url })),
       idem: options.idem,
