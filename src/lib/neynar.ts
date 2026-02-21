@@ -53,8 +53,12 @@ export async function postToChannel(
 
     console.log("[neynar] Cast published:", response.cast.hash);
     return { hash: response.cast.hash };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+  } catch (err: any) {
+    const message = err?.response?.data
+      ? JSON.stringify(err.response.data)
+      : err instanceof Error
+        ? err.message
+        : String(err);
     console.error("[neynar] Failed to publish cast:", message);
     return { error: message };
   }
