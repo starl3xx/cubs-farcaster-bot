@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { fetchCubsOdds, formatOddsCast } from "../../../src/lib/polymarket";
 import { postToChannel } from "../../../src/lib/neynar";
+import { postTweet } from "../../../src/lib/twitter";
 import {
   getPreviousOdds,
   saveCurrentOdds,
@@ -48,6 +49,12 @@ export default async function handler(
       await markOddsPosted(result.hash);
     }
 
+    // Cross-post to Twitter (best-effort)
+    const tweetResult = await postTweet(text);
+    if (tweetResult.error) {
+      console.error("[check-odds] Twitter error (non-fatal):", tweetResult.error);
+    }
+
     return res.status(200).json({
       ok: true,
       current,
@@ -55,6 +62,7 @@ export default async function handler(
       text,
       posted: !!result.hash,
       castHash: result.hash || null,
+      tweetId: tweetResult.tweetId || null,
       error: result.error || null,
     });
   } catch (err) {

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { fetchCubsOdds, formatOddsCast } from "../../../src/lib/polymarket";
 import { postToChannel } from "../../../src/lib/neynar";
+import { postTweet } from "../../../src/lib/twitter";
 import {
   getPreviousOdds,
   saveCurrentOdds,
@@ -23,6 +24,7 @@ export default async function handler(
     const { text, embeds } = formatOddsCast(current, previous);
 
     let result = { hash: undefined as string | undefined, error: "dry run" };
+    let tweetId: string | null = null;
 
     if (!dryRun) {
       const postResult = await postToChannel(text, {
@@ -40,6 +42,13 @@ export default async function handler(
       if (postResult.hash) {
         await markOddsPosted(postResult.hash);
       }
+
+      // Cross-post to Twitter (best-effort)
+      const tweetResult = await postTweet(text);
+      if (tweetResult.error) {
+        console.error("[post-odds] Twitter error (non-fatal):", tweetResult.error);
+      }
+      tweetId = tweetResult.tweetId || null;
     }
 
     return res.status(200).json({
@@ -50,6 +59,7 @@ export default async function handler(
       embeds,
       posted: !!result.hash,
       castHash: result.hash || null,
+      tweetId,
       error: result.error || null,
     });
   } catch (err) {
