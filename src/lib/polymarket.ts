@@ -89,7 +89,7 @@ export function formatOddsCast(
   const nlcDelta = formatDelta(current.nlCentral, previous?.nlCentral ?? null);
 
   const lines = [
-    "Cubs Odds Update",
+    "Cubs 2026 @polymarket odds update",
     "",
     `World Series: ${formatPct(current.worldSeries)}${wsDelta}`,
     `NL Central: ${formatPct(current.nlCentral)}${nlcDelta}`,
