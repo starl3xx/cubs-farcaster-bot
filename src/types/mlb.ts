@@ -12,6 +12,8 @@ export interface ScheduleDate {
 export interface ScheduleGame {
   gamePk: number;
   gameDate: string;
+  gameType: string; // "S", "R", "F", "D", "L", "W", "A", "E"
+  seriesDescription?: string; // "Spring Training", "ALDS", "World Series", etc.
   status: GameStatus;
   teams: {
     away: ScheduleTeam;
@@ -45,6 +47,10 @@ export interface GameFeed {
 }
 
 export interface GameData {
+  game: {
+    type: string; // "S"=Spring Training, "R"=Regular, "F"=Wild Card, "D"=Division, "L"=LCS, "W"=World Series, "A"=All-Star, "E"=Exhibition
+    season: string;
+  };
   teams: {
     away: TeamInfo;
     home: TeamInfo;
@@ -138,8 +144,13 @@ export interface BoxscoreTeam {
   };
 }
 
-// Game content (highlights)
+// Game content (highlights + editorial)
 export interface GameContent {
+  editorial?: {
+    recap?: {
+      mlb?: EditorialArticle;
+    };
+  };
   highlights?: {
     highlights?: {
       items?: HighlightItem[];
@@ -147,7 +158,30 @@ export interface GameContent {
   };
   media?: {
     epg?: EpgItem[];
+    highlights?: {
+      highlights?: {
+        items?: HighlightItem[];
+      };
+    };
   };
+}
+
+export interface EditorialArticle {
+  headline?: string;
+  image?: EditorialImage;
+}
+
+export interface EditorialImage {
+  title?: string;
+  altText?: string;
+  cuts?: ImageCut[];
+}
+
+export interface ImageCut {
+  aspectRatio: string;
+  width: number;
+  height: number;
+  src: string;
 }
 
 export interface HighlightItem {

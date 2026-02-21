@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getSchedule, getGameFeed, getGameContent, getGameDates } from "../../../src/lib/mlb-api";
-import { formatBoxScoreCast, extractHighlightUrl } from "../../../src/lib/formatter";
+import { formatBoxScoreCast, extractHighlightUrl, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
 import {
   isGamePosted,
@@ -79,7 +79,8 @@ export default async function handler(
 
       // Format and post
       const text = formatBoxScoreCast(feed, game.gameNumber > 1 ? game.gameNumber : undefined);
-      const embeds = highlightUrl ? [{ url: highlightUrl }] : [];
+      const mediaUrls = extractMediaEmbeds(content);
+      const embeds = mediaUrls.map((url) => ({ url }));
 
       const result = await postToChannel(text, {
         embeds,

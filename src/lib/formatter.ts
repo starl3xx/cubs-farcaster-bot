@@ -1,11 +1,21 @@
 import { CUBS_TEAM_ID } from "./config";
 import type { GameFeed, GameContent, Playback } from "../types/mlb";
 
+const GAME_TYPE_LABELS: Record<string, string> = {
+  S: "Spring Training",
+  E: "Exhibition",
+  F: "Wild Card",
+  D: "Division Series",
+  L: "League Championship",
+  W: "World Series",
+  A: "All-Star Game",
+};
+
 /**
  * Format a box score cast from MLB game feed data.
  *
  * Example output:
- * Cubs shut out Cardinals 2-0 — FINAL
+ * Spring Training: Cubs shut out Cardinals 2-0 — FINAL
  *
  *          1  2  3  4  5  6  7  8  9   R  H  E
  * STL      0  0  0  0  0  0  0  0  0   0  6  0
@@ -33,6 +43,11 @@ export function formatBoxScoreCast(
   const cubsRuns = cubsAreHome ? homeRuns : awayRuns;
   const opponentRuns = cubsAreHome ? awayRuns : homeRuns;
 
+  // Game type prefix (Spring Training, Postseason, etc.)
+  const gameType = gameData.game?.type || "R";
+  const gameTypeLabel = GAME_TYPE_LABELS[gameType];
+  const prefix = gameTypeLabel ? `${gameTypeLabel}: ` : "";
+
   // Headline
   const verb = getVerb(cubsWon, cubsRuns, opponentRuns);
   const doubleheaderTag =
@@ -42,8 +57,8 @@ export function formatBoxScoreCast(
       ? ` (${linescore.currentInning} inn.)`
       : "";
   const headline = cubsWon
-    ? `Cubs ${verb} ${opponent.teamName} ${cubsRuns}-${opponentRuns}${extraInnings} — FINAL${doubleheaderTag}`
-    : `${opponent.teamName} ${verb} Cubs ${opponentRuns}-${cubsRuns}${extraInnings} — FINAL${doubleheaderTag}`;
+    ? `${prefix}Cubs ${verb} ${opponent.teamName} ${cubsRuns}-${opponentRuns}${extraInnings} — FINAL${doubleheaderTag}`
+    : `${prefix}${opponent.teamName} ${verb} Cubs ${opponentRuns}-${cubsRuns}${extraInnings} — FINAL${doubleheaderTag}`;
 
   // Inning-by-inning line score
   const lineScore = formatLineScore(linescore, away.abbreviation, home.abbreviation);
@@ -116,7 +131,6 @@ function formatLineScore(
   for (let i = 0; i < numInnings; i++) {
     const inn = innings[i];
     if (i === numInnings - 1 && inn?.home?.runs === undefined) {
-      // Home team didn't bat (won in top half or standard 9th not needed)
       homeInnings.push(" x");
     } else {
       homeInnings.push(
@@ -148,8 +162,29 @@ function formatDecisions(
 }
 
 /**
+ * Extract the best media embed from game content.
+ * Priority: recap video (mp4) > editorial recap photo > any highlight video
+ */
+export function extractMediaEmbeds(content: GameContent): string[] {
+  const embeds: string[] = [];
+
+  // 1. Try recap video
+  const videoUrl = extractHighlightUrl(content);
+  if (videoUrl) {
+    embeds.push(videoUrl);
+  }
+
+  // 2. Try editorial recap photo (if no video, or as second embed)
+  const photoUrl = extractEditorialPhoto(content);
+  if (photoUrl && embeds.length < 2) {
+    embeds.push(photoUrl);
+  }
+
+  return embeds;
+}
+
+/**
  * Extract the recap highlight video URL from game content.
- * Looks for the "Recap" item in the epg or highlights, preferring mp4Avc format.
  */
 export function extractHighlightUrl(content: GameContent): string | null {
   // Try media.epg first (newer format)
@@ -162,16 +197,20 @@ export function extractHighlightUrl(content: GameContent): string | null {
     }
   }
 
-  // Fall back to highlights.highlights.items
+  // Try media.highlights (another path)
+  if (content.media?.highlights?.highlights?.items) {
+    for (const item of content.media.highlights.highlights.items) {
+      if (isRecapItem(item)) {
+        const url = findBestPlayback(item.playbacks);
+        if (url) return url;
+      }
+    }
+  }
+
+  // Fall back to top-level highlights
   if (content.highlights?.highlights?.items) {
     for (const item of content.highlights.highlights.items) {
-      const isRecap =
-        item.type === "video" &&
-        (item.title?.toLowerCase().includes("recap") ||
-          item.keywordsAll?.some(
-            (k) => k.type === "slug" && k.value === "recap"
-          ));
-      if (isRecap) {
+      if (isRecapItem(item)) {
         const url = findBestPlayback(item.playbacks);
         if (url) return url;
       }
@@ -179,6 +218,40 @@ export function extractHighlightUrl(content: GameContent): string | null {
   }
 
   return null;
+}
+
+function isRecapItem(item: { type: string; title: string; keywordsAll?: { type: string; value: string }[] }): boolean {
+  return (
+    item.type === "video" &&
+    (item.title?.toLowerCase().includes("recap") ||
+      item.keywordsAll?.some(
+        (k) => k.type === "slug" && k.value === "recap"
+      ) === true)
+  );
+}
+
+/**
+ * Extract the editorial recap photo from game content.
+ * Returns a 960x540 (16:9) JPG URL — good balance of quality and load time.
+ */
+function extractEditorialPhoto(content: GameContent): string | null {
+  const image = content.editorial?.recap?.mlb?.image;
+  if (!image?.cuts?.length) return null;
+
+  // Prefer 960x540 (16:9) — good embed size
+  const preferred = image.cuts.find(
+    (c) => c.aspectRatio === "16:9" && c.width === 960
+  );
+  if (preferred) return preferred.src;
+
+  // Fall back to any 16:9 cut, largest first
+  const widecuts = image.cuts
+    .filter((c) => c.aspectRatio === "16:9")
+    .sort((a, b) => b.width - a.width);
+  if (widecuts.length) return widecuts[0].src;
+
+  // Last resort: any cut
+  return image.cuts[0]?.src || null;
 }
 
 function findBestPlayback(playbacks?: Playback[]): string | null {
@@ -206,6 +279,5 @@ export function formatNewsCast(
 ): string {
   const parts = [`Cubs News: ${title}`];
   if (author) parts.push("", `by ${author}`);
-  // URL will be embedded, creating a rich unfurl card
   return parts.join("\n");
 }
