@@ -158,8 +158,11 @@ function formatDecisions(
 export function extractMediaEmbeds(content: GameContent): string[] {
   const embeds: string[] = [];
 
-  // 1. Try recap video
-  const videoUrl = extractHighlightUrl(content);
+  // 1. Try recap video, fall back to top Cubs play highlight
+  let videoUrl = extractHighlightUrl(content);
+  if (!videoUrl) {
+    videoUrl = extractCubsHighlightUrl(content);
+  }
   if (videoUrl) {
     embeds.push(videoUrl);
   }
@@ -204,6 +207,32 @@ export function extractHighlightUrl(content: GameContent): string | null {
         const url = findBestPlayback(item.playbacks);
         if (url) return url;
       }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract the top Cubs play highlight when no recap video exists.
+ * Filters for game-story-highlight videos tagged with the Cubs team.
+ */
+function extractCubsHighlightUrl(content: GameContent): string | null {
+  const items = content.highlights?.highlights?.items;
+  if (!items?.length) return null;
+
+  const cubsTag = `teamid-${CUBS_TEAM_ID}`;
+
+  for (const item of items) {
+    if (item.type !== "video") continue;
+
+    const kw = item.keywordsAll || [];
+    const isCubs = kw.some((k) => k.value === cubsTag);
+    const isPlayHighlight = kw.some((k) => k.value === "game-story-highlight");
+
+    if (isCubs && isPlayHighlight) {
+      const url = findBestPlayback(item.playbacks);
+      if (url) return url;
     }
   }
 
