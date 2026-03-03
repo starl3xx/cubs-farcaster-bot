@@ -17,9 +17,8 @@ const GAME_TYPE_LABELS: Record<string, string> = {
  * Example output:
  * Spring Training: Cubs shut out Cardinals 2-0 — FINAL
  *
- *          1  2  3  4  5  6  7  8  9   R  H  E
- * STL      0  0  0  0  0  0  0  0  0   0  6  0
- * CHC      0  0  0  0  1  0  1  0  x   2  6  0
+ * STL  000 000 000  0R 6H 0E
+ * CHC  000 010 10x  2R 6H 0E
  *
  * W: Assad | L: King | S: Wicks
  *
@@ -106,46 +105,37 @@ function formatLineScore(
   const innings = linescore.innings;
   const numInnings = Math.max(innings.length, 9);
 
-  // Header row: inning numbers
-  const inningNums = [];
-  for (let i = 1; i <= numInnings; i++) {
-    inningNums.push(String(i).padStart(2));
-  }
-  const header = "".padEnd(5) + inningNums.join(" ") + "   R  H  E";
-
-  // Away runs per inning
-  const awayInnings = [];
-  for (let i = 0; i < numInnings; i++) {
-    const inn = innings[i];
-    awayInnings.push(inn?.away?.runs !== undefined ? String(inn.away.runs).padStart(2) : "  ");
-  }
-  const awayLine =
-    awayAbbr.padEnd(5) +
-    awayInnings.join(" ") +
-    `  ${String(linescore.teams.away.runs).padStart(2)}` +
-    ` ${String(linescore.teams.away.hits).padStart(2)}` +
-    ` ${String(linescore.teams.away.errors).padStart(2)}`;
-
-  // Home runs per inning — use "x" if bottom of last inning wasn't played
-  const homeInnings = [];
-  for (let i = 0; i < numInnings; i++) {
-    const inn = innings[i];
-    if (i === numInnings - 1 && inn?.home?.runs === undefined) {
-      homeInnings.push(" x");
-    } else {
-      homeInnings.push(
-        inn?.home?.runs !== undefined ? String(inn.home.runs).padStart(2) : "  "
-      );
+  // Get run value for a half-inning
+  function inningRuns(idx: number, side: "away" | "home"): string {
+    const inn = innings[idx];
+    if (side === "home" && idx === numInnings - 1 && inn?.home?.runs === undefined) {
+      return "x";
     }
+    const runs = inn?.[side]?.runs;
+    return runs !== undefined ? String(runs) : " ";
   }
-  const homeLine =
-    homeAbbr.padEnd(5) +
-    homeInnings.join(" ") +
-    `  ${String(linescore.teams.home.runs).padStart(2)}` +
-    ` ${String(linescore.teams.home.hits).padStart(2)}` +
-    ` ${String(linescore.teams.home.errors).padStart(2)}`;
 
-  return [header, awayLine, homeLine].join("\n");
+  // Build innings grouped by 3 (traditional baseball box score format).
+  // Grouped digits avoid proportional-font alignment issues since all
+  // digits are the same width — no space-padding needed within groups.
+  function groupedInnings(side: "away" | "home"): string {
+    const groups: string[] = [];
+    for (let g = 0; g < numInnings; g += 3) {
+      let chunk = "";
+      for (let i = g; i < Math.min(g + 3, numInnings); i++) {
+        chunk += inningRuns(i, side);
+      }
+      groups.push(chunk);
+    }
+    return groups.join(" ");
+  }
+
+  const { away, home } = linescore.teams;
+
+  const awayLine = `${awayAbbr}  ${groupedInnings("away")}  ${away.runs}R ${away.hits}H ${away.errors}E`;
+  const homeLine = `${homeAbbr}  ${groupedInnings("home")}  ${home.runs}R ${home.hits}H ${home.errors}E`;
+
+  return `${awayLine}\n${homeLine}`;
 }
 
 function formatDecisions(

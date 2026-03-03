@@ -5,10 +5,10 @@ let client: TwitterApi | null = null;
 function getClient(): TwitterApi {
   if (!client) {
     client = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY!,
-      appSecret: process.env.TWITTER_API_SECRET!,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-      accessSecret: process.env.TWITTER_ACCESS_SECRET!,
+      appKey: process.env.TWITTER_API_KEY!.trim(),
+      appSecret: process.env.TWITTER_API_SECRET!.trim(),
+      accessToken: process.env.TWITTER_ACCESS_TOKEN!.trim(),
+      accessSecret: process.env.TWITTER_ACCESS_SECRET!.trim(),
     });
   }
   return client;
@@ -31,7 +31,7 @@ export interface TweetError {
 export async function postTweet(
   text: string
 ): Promise<TweetResult | TweetError> {
-  if (process.env.TWITTER_ENABLED !== "true") {
+  if (process.env.TWITTER_ENABLED?.trim() !== "true") {
     console.log("[twitter] TWITTER_ENABLED is not true, skipping tweet");
     return { error: "TWITTER_ENABLED is not true" };
   }
