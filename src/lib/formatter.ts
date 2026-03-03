@@ -56,8 +56,8 @@ export function formatBoxScoreCast(
       ? ` (${linescore.currentInning} inn.)`
       : "";
   const headline = cubsWon
-    ? `${prefix}Cubs ${verb} ${opponent.teamName} ${cubsRuns}-${opponentRuns}${extraInnings} — FINAL${doubleheaderTag}`
-    : `${prefix}${opponent.teamName} ${verb} Cubs ${opponentRuns}-${cubsRuns}${extraInnings} — FINAL${doubleheaderTag}`;
+    ? `\u{1F4CB} ${prefix}Cubs ${verb} ${opponent.teamName} ${cubsRuns}-${opponentRuns}${extraInnings} — FINAL${doubleheaderTag}`
+    : `\u{1F4CB} ${prefix}${opponent.teamName} ${verb} Cubs ${opponentRuns}-${cubsRuns}${extraInnings} — FINAL${doubleheaderTag}`;
 
   // Inning-by-inning line score
   const lineScore = formatLineScore(linescore, away.abbreviation, home.abbreviation);
@@ -69,8 +69,8 @@ export function formatBoxScoreCast(
   const venue = gameData.venue.name;
 
   const parts = [headline, "", lineScore];
-  if (decisionsLine) parts.push("", decisionsLine);
-  parts.push("", venue);
+  if (decisionsLine) parts.push("", `\u26BE ${decisionsLine}`);
+  parts.push("", `\u{1F3DF}\uFE0F ${venue}`);
 
   return parts.join("\n");
 }
