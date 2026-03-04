@@ -215,7 +215,9 @@ export function extractHighlightUrl(content: GameContent): string | null {
 
 /**
  * Extract the top Cubs play highlight when no recap video exists.
- * Filters for game-story-highlight videos tagged with the Cubs team.
+ * Filters for in-game-highlight videos tagged with the Cubs team.
+ * Uses in-game-highlight (not game-story-highlight) because exhibition
+ * games don't have the game-story-highlight taxonomy.
  */
 function extractCubsHighlightUrl(content: GameContent): string | null {
   const items = content.highlights?.highlights?.items;
@@ -228,7 +230,7 @@ function extractCubsHighlightUrl(content: GameContent): string | null {
 
     const kw = item.keywordsAll || [];
     const isCubs = kw.some((k) => k.value === cubsTag);
-    const isPlayHighlight = kw.some((k) => k.value === "game-story-highlight");
+    const isPlayHighlight = kw.some((k) => k.value === "in-game-highlight");
 
     if (isCubs && isPlayHighlight) {
       const url = findBestPlayback(item.playbacks);
