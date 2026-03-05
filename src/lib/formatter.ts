@@ -194,8 +194,7 @@ export function extractHighlightUrl(content: GameContent): string | null {
   if (content.media?.highlights?.highlights?.items) {
     for (const item of content.media.highlights.highlights.items) {
       if (isRecapItem(item)) {
-        const url = findBestPlayback(item.playbacks);
-        if (url) return url;
+        return `https://www.mlb.com/video/${item.id}`;
       }
     }
   }
@@ -204,8 +203,7 @@ export function extractHighlightUrl(content: GameContent): string | null {
   if (content.highlights?.highlights?.items) {
     for (const item of content.highlights.highlights.items) {
       if (isRecapItem(item)) {
-        const url = findBestPlayback(item.playbacks);
-        if (url) return url;
+        return `https://www.mlb.com/video/${item.id}`;
       }
     }
   }
@@ -233,8 +231,9 @@ function extractCubsHighlightUrl(content: GameContent): string | null {
     const isPlayHighlight = kw.some((k) => k.value === "in-game-highlight");
 
     if (isCubs && isPlayHighlight) {
-      const url = findBestPlayback(item.playbacks);
-      if (url) return url;
+      // Return the MLB web URL — Farcaster unfurls og:video from the page.
+      // Raw mp4 URLs show "No preview found for shared link".
+      return `https://www.mlb.com/video/${item.id}`;
     }
   }
 
