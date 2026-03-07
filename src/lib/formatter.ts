@@ -176,12 +176,12 @@ export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
   if (videoResult) {
     embeds.push(videoResult.mp4Url);
     videoMp4Url = videoResult.mp4Url;
-  }
-
-  // 2. Try editorial recap photo (if no video, or as second embed)
-  const photoUrl = extractEditorialPhoto(content);
-  if (photoUrl && embeds.length < 2) {
-    embeds.push(photoUrl);
+  } else {
+    // Fall back to editorial recap photo only when no video is available
+    const photoUrl = extractEditorialPhoto(content);
+    if (photoUrl) {
+      embeds.push(photoUrl);
+    }
   }
 
   return { embeds, videoMp4Url };
