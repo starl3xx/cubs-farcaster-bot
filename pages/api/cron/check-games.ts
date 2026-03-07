@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getSchedule, getGameFeed, getGameContent, getGameDates } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractHighlightUrl, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
+import { rehostVideo } from "../../../src/lib/video";
 import {
   isGamePosted,
   markGamePosted,
@@ -67,10 +68,10 @@ export default async function handler(
       ]);
 
       // Check for highlight video
-      const highlightUrl = extractHighlightUrl(content);
+      const highlightResult = extractHighlightUrl(content);
       const retryCount = await getGameTracking(gamePk);
 
-      if (!highlightUrl && retryCount < MAX_HIGHLIGHT_RETRIES) {
+      if (!highlightResult && retryCount < MAX_HIGHLIGHT_RETRIES) {
         // No highlight yet, wait and retry
         await incrementGameTracking(gamePk);
         results[`game_${gamePk}`] = `waiting for highlight (retry ${retryCount + 1}/${MAX_HIGHLIGHT_RETRIES})`;
@@ -79,8 +80,22 @@ export default async function handler(
 
       // Format and post
       const text = formatBoxScoreCast(feed, game.gameNumber > 1 ? game.gameNumber : undefined);
-      const mediaUrls = extractMediaEmbeds(content);
-      const embeds = mediaUrls.map((url) => ({ url }));
+      const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
+
+      // Re-host video on Vercel Blob for native Warpcast playback
+      let finalUrls = mediaUrls;
+      if (videoMp4Url) {
+        const blobUrl = await rehostVideo(videoMp4Url, String(gamePk));
+        if (blobUrl) {
+          // Replace the raw mp4 URL with the blob URL
+          finalUrls = mediaUrls.map((url) => url === videoMp4Url ? blobUrl : url);
+        } else {
+          // Re-host failed — drop the video embed, keep photo only
+          finalUrls = mediaUrls.filter((url) => url !== videoMp4Url);
+        }
+      }
+
+      const embeds = finalUrls.map((url) => ({ url }));
 
       const result = await postToChannel(text, {
         embeds,

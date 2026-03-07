@@ -151,20 +151,31 @@ function formatDecisions(
   return parts.join(" | ");
 }
 
+export interface MediaEmbeds {
+  embeds: string[];
+  /** Raw mp4 URL from MLB CDN — needs re-hosting before embedding */
+  videoMp4Url?: string;
+}
+
 /**
  * Extract the best media embed from game content.
  * Priority: recap video (mp4) > editorial recap photo > any highlight video
+ *
+ * Returns both the embed URLs and the raw mp4 URL separately so the caller
+ * can re-host the video on a fast CDN (Vercel Blob) for native playback.
  */
-export function extractMediaEmbeds(content: GameContent): string[] {
+export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
   const embeds: string[] = [];
+  let videoMp4Url: string | undefined;
 
   // 1. Try recap video, fall back to top Cubs play highlight
-  let videoUrl = extractHighlightUrl(content);
-  if (!videoUrl) {
-    videoUrl = extractCubsHighlightUrl(content);
+  let videoResult = extractHighlightUrl(content);
+  if (!videoResult) {
+    videoResult = extractCubsHighlightUrl(content);
   }
-  if (videoUrl) {
-    embeds.push(videoUrl);
+  if (videoResult) {
+    embeds.push(videoResult.mp4Url);
+    videoMp4Url = videoResult.mp4Url;
   }
 
   // 2. Try editorial recap photo (if no video, or as second embed)
@@ -173,19 +184,24 @@ export function extractMediaEmbeds(content: GameContent): string[] {
     embeds.push(photoUrl);
   }
 
-  return embeds;
+  return { embeds, videoMp4Url };
+}
+
+interface HighlightResult {
+  mp4Url: string;
 }
 
 /**
- * Extract the recap highlight video URL from game content.
+ * Extract the recap highlight video mp4 URL from game content.
+ * Returns the raw mp4 URL for re-hosting on a fast CDN.
  */
-export function extractHighlightUrl(content: GameContent): string | null {
+export function extractHighlightUrl(content: GameContent): HighlightResult | null {
   // Try media.epg first (newer format)
   if (content.media?.epg) {
     for (const epg of content.media.epg) {
       if (epg.title === "Recap" && epg.items?.length) {
         const url = findBestPlayback(epg.items[0].playbacks);
-        if (url) return url;
+        if (url) return { mp4Url: url };
       }
     }
   }
@@ -194,7 +210,8 @@ export function extractHighlightUrl(content: GameContent): string | null {
   if (content.media?.highlights?.highlights?.items) {
     for (const item of content.media.highlights.highlights.items) {
       if (isRecapItem(item)) {
-        return `https://www.mlb.com/video/${item.id}`;
+        const url = findBestPlayback(item.playbacks);
+        if (url) return { mp4Url: url };
       }
     }
   }
@@ -203,7 +220,8 @@ export function extractHighlightUrl(content: GameContent): string | null {
   if (content.highlights?.highlights?.items) {
     for (const item of content.highlights.highlights.items) {
       if (isRecapItem(item)) {
-        return `https://www.mlb.com/video/${item.id}`;
+        const url = findBestPlayback(item.playbacks);
+        if (url) return { mp4Url: url };
       }
     }
   }
@@ -217,7 +235,7 @@ export function extractHighlightUrl(content: GameContent): string | null {
  * Uses in-game-highlight (not game-story-highlight) because exhibition
  * games don't have the game-story-highlight taxonomy.
  */
-function extractCubsHighlightUrl(content: GameContent): string | null {
+function extractCubsHighlightUrl(content: GameContent): HighlightResult | null {
   const items = content.highlights?.highlights?.items;
   if (!items?.length) return null;
 
@@ -231,9 +249,8 @@ function extractCubsHighlightUrl(content: GameContent): string | null {
     const isPlayHighlight = kw.some((k) => k.value === "in-game-highlight");
 
     if (isCubs && isPlayHighlight) {
-      // Return the MLB web URL — Farcaster unfurls og:video from the page.
-      // Raw mp4 URLs show "No preview found for shared link".
-      return `https://www.mlb.com/video/${item.id}`;
+      const url = findBestPlayback(item.playbacks);
+      if (url) return { mp4Url: url };
     }
   }
 
