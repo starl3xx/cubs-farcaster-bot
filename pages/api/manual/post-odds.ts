@@ -25,6 +25,7 @@ export default async function handler(
 
     let result = { hash: undefined as string | undefined, error: "dry run" };
     let tweetId: string | null = null;
+    let twitterError: string | null = null;
 
     if (!dryRun) {
       const postResult = await postToChannel(text, {
@@ -47,6 +48,7 @@ export default async function handler(
       const tweetResult = await postTweet(text);
       if (tweetResult.error) {
         console.error("[post-odds] Twitter error (non-fatal):", tweetResult.error);
+        twitterError = tweetResult.error;
       }
       tweetId = tweetResult.tweetId || null;
     }
@@ -60,6 +62,7 @@ export default async function handler(
       posted: !!result.hash,
       castHash: result.hash || null,
       tweetId,
+      twitterError,
       error: result.error || null,
     });
   } catch (err) {
