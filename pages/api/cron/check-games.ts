@@ -80,15 +80,15 @@ export default async function handler(
 
       // Format and post
       const text = formatBoxScoreCast(feed, game.gameNumber > 1 ? game.gameNumber : undefined);
-      const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
+      const { embeds: mediaUrls, videoMp4Url, posterUrl } = extractMediaEmbeds(content);
 
-      // Re-host video on Vercel Blob for native Warpcast playback
+      // Re-host video on Vercel Blob and wrap with OG page for native Warpcast playback
       let finalUrls = mediaUrls;
       if (videoMp4Url) {
-        const blobUrl = await rehostVideo(videoMp4Url, String(gamePk));
-        if (blobUrl) {
-          // Replace the raw mp4 URL with the blob URL
-          finalUrls = mediaUrls.map((url) => url === videoMp4Url ? blobUrl : url);
+        const result = await rehostVideo(videoMp4Url, String(gamePk), posterUrl);
+        if (result) {
+          // Replace the raw mp4 URL with the OG wrapper URL
+          finalUrls = [result.embedUrl];
         } else {
           // Re-host failed — drop the video embed, keep photo only
           finalUrls = mediaUrls.filter((url) => url !== videoMp4Url);

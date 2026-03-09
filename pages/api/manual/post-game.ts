@@ -34,15 +34,15 @@ export default async function handler(
       getGameContent(gamePk),
     ]);
 
-    const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
+    const { embeds: mediaUrls, videoMp4Url, posterUrl } = extractMediaEmbeds(content);
     const text = formatBoxScoreCast(feed);
 
-    // Re-host video on Vercel Blob for native Warpcast playback
+    // Re-host video on Vercel Blob and wrap with OG page for native Warpcast playback
     let finalUrls = mediaUrls;
     if (videoMp4Url) {
-      const blobUrl = await rehostVideo(videoMp4Url, String(gamePk));
-      if (blobUrl) {
-        finalUrls = mediaUrls.map((url) => url === videoMp4Url ? blobUrl : url);
+      const result = await rehostVideo(videoMp4Url, String(gamePk), posterUrl);
+      if (result) {
+        finalUrls = [result.embedUrl];
       } else {
         finalUrls = mediaUrls.filter((url) => url !== videoMp4Url);
       }

@@ -155,6 +155,8 @@ export interface MediaEmbeds {
   embeds: string[];
   /** Raw mp4 URL from MLB CDN — needs re-hosting before embedding */
   videoMp4Url?: string;
+  /** Editorial recap photo URL — used as video poster/thumbnail */
+  posterUrl?: string;
 }
 
 /**
@@ -173,18 +175,19 @@ export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
   if (!videoResult) {
     videoResult = extractCubsHighlightUrl(content);
   }
+  const posterUrl = extractEditorialPhoto(content) || undefined;
+
   if (videoResult) {
     embeds.push(videoResult.mp4Url);
     videoMp4Url = videoResult.mp4Url;
   } else {
     // Fall back to editorial recap photo only when no video is available
-    const photoUrl = extractEditorialPhoto(content);
-    if (photoUrl) {
-      embeds.push(photoUrl);
+    if (posterUrl) {
+      embeds.push(posterUrl);
     }
   }
 
-  return { embeds, videoMp4Url };
+  return { embeds, videoMp4Url, posterUrl };
 }
 
 interface HighlightResult {
