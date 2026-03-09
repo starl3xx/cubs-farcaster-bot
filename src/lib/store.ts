@@ -90,6 +90,25 @@ export async function markOddsPosted(castHash: string): Promise<void> {
   });
 }
 
+// Video blob URL storage
+export interface VideoBlob {
+  blobUrl: string;
+  posterUrl?: string;
+}
+
+export async function saveVideoBlob(
+  slug: string,
+  data: VideoBlob
+): Promise<void> {
+  await getRedis().set(`${REDIS_KEYS.VIDEO_BLOB}${slug}`, data, {
+    ex: REDIS_TTL.VIDEO_BLOB,
+  });
+}
+
+export async function getVideoBlob(slug: string): Promise<VideoBlob | null> {
+  return getRedis().get<VideoBlob>(`${REDIS_KEYS.VIDEO_BLOB}${slug}`);
+}
+
 // Health check
 export async function getRedisStatus(): Promise<{
   connected: boolean;

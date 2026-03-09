@@ -40,9 +40,9 @@ export default async function handler(
     // Re-host video on Vercel Blob and wrap with OG page for native Warpcast playback
     let finalUrls = mediaUrls;
     if (videoMp4Url) {
-      const result = await rehostVideo(videoMp4Url, String(gamePk), posterUrl);
-      if (result) {
-        finalUrls = [result.embedUrl];
+      const embedUrl = await rehostVideo(videoMp4Url, String(gamePk), posterUrl);
+      if (embedUrl) {
+        finalUrls = [embedUrl];
       } else {
         finalUrls = mediaUrls.filter((url) => url !== videoMp4Url);
       }

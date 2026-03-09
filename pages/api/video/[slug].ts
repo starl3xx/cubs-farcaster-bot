@@ -1,42 +1,41 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getVideoBlob } from "../../../src/lib/store";
 
 /**
  * OG video wrapper page.
  *
  * Warpcast's unfurler doesn't render raw mp4 URLs — it needs an HTML page
- * with og:video meta tags. This endpoint serves minimal HTML whose OG tags
- * point to the Vercel Blob mp4 URL.
+ * with og:video meta tags. This endpoint looks up the Vercel Blob mp4 URL
+ * from Redis (stored during video re-hosting) and serves minimal HTML with
+ * the proper OG tags for native inline video playback.
  *
- * Usage: /api/video/<slug>?url=<blob-mp4-url>&poster=<image-url>
- *
- * The cast embed URL points here; Warpcast unfurls this page and discovers
- * the og:video tag, rendering a native inline video player.
+ * Embed URL: /api/video/{gamePk}  (short, under Farcaster's 256-byte limit)
  */
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const videoUrl = req.query.url as string;
-  const posterUrl = req.query.poster as string | undefined;
-  const title = (req.query.title as string) || "Cubs Highlight";
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const slug = req.query.slug as string;
 
-  if (!videoUrl) {
-    return res.status(400).json({ error: "url query param required" });
+  const data = await getVideoBlob(slug);
+  if (!data) {
+    return res.status(404).json({ error: "Video not found" });
   }
 
-  const ogImage = posterUrl || "";
+  const { blobUrl, posterUrl } = data;
+  const title = "Cubs Highlight";
 
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta property="og:type" content="video.other" />
   <meta property="og:title" content="${escapeHtml(title)}" />
-  <meta property="og:video" content="${escapeHtml(videoUrl)}" />
-  <meta property="og:video:secure_url" content="${escapeHtml(videoUrl)}" />
+  <meta property="og:video" content="${escapeHtml(blobUrl)}" />
+  <meta property="og:video:secure_url" content="${escapeHtml(blobUrl)}" />
   <meta property="og:video:type" content="video/mp4" />
   <meta property="og:video:width" content="1280" />
   <meta property="og:video:height" content="720" />
-  ${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}" />` : ""}
+  ${posterUrl ? `<meta property="og:image" content="${escapeHtml(posterUrl)}" />` : ""}
 </head>
 <body>
-  <video src="${escapeHtml(videoUrl)}" controls autoplay style="max-width:100%"></video>
+  <video src="${escapeHtml(blobUrl)}" controls autoplay style="max-width:100%"></video>
 </body>
 </html>`;
 
