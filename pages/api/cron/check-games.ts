@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getSchedule, getGameFeed, getGameContent, getGameDates } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractHighlightUrl, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
+import { uploadToLivepeer } from "../../../src/lib/video";
 import {
   isGamePosted,
   markGamePosted,
@@ -79,9 +80,19 @@ export default async function handler(
 
       // Format and post
       const text = formatBoxScoreCast(feed, game.gameNumber > 1 ? game.gameNumber : undefined);
-      const { embeds: mediaUrls } = extractMediaEmbeds(content);
+      const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
 
-      const embeds = mediaUrls.map((url) => ({ url }));
+      // Upload video to Livepeer for native Warpcast playback
+      let finalUrls = mediaUrls;
+      if (videoMp4Url) {
+        const playbackUrl = await uploadToLivepeer(videoMp4Url, String(gamePk));
+        if (playbackUrl) {
+          finalUrls = [playbackUrl];
+        }
+        // If upload fails, finalUrls stays as mediaUrls (photo fallback)
+      }
+
+      const embeds = finalUrls.map((url) => ({ url }));
 
       const result = await postToChannel(text, {
         embeds,

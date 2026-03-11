@@ -153,7 +153,9 @@ function formatDecisions(
 
 export interface MediaEmbeds {
   embeds: string[];
-  /** Editorial recap photo URL — used as video poster/thumbnail */
+  /** Raw mp4 URL from MLB CDN — needs upload to Livepeer for native playback */
+  videoMp4Url?: string;
+  /** Editorial recap photo URL — used as fallback */
   posterUrl?: string;
 }
 
@@ -165,6 +167,7 @@ export interface MediaEmbeds {
  */
 export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
   const embeds: string[] = [];
+  let videoMp4Url: string | undefined;
 
   // 1. Try recap video, fall back to top Cubs play highlight
   let videoResult = extractHighlightUrl(content);
@@ -174,7 +177,7 @@ export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
   const posterUrl = extractEditorialPhoto(content) || undefined;
 
   if (videoResult) {
-    embeds.push(videoResult.url);
+    videoMp4Url = videoResult.url;
   } else {
     // Fall back to editorial recap photo only when no video is available
     if (posterUrl) {
@@ -182,7 +185,7 @@ export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
     }
   }
 
-  return { embeds, posterUrl };
+  return { embeds, videoMp4Url, posterUrl };
 }
 
 interface HighlightResult {
@@ -292,17 +295,13 @@ function extractEditorialPhoto(content: GameContent): string | null {
 function findBestPlayback(playbacks?: Playback[]): string | null {
   if (!playbacks?.length) return null;
 
-  // Prefer HLS (.m3u8) — Warpcast plays these as native inline video
-  const hls = playbacks.find((p) => p.name === "hlsCloud");
-  if (hls) return hls.url;
-
-  // Fall back to any HLS stream
-  const anyHls = playbacks.find((p) => p.url?.includes(".m3u8"));
-  if (anyHls) return anyHls.url;
-
-  // Fall back to mp4 (renders as link preview, but better than nothing)
+  // Prefer mp4Avc — we upload this to Livepeer for native Warpcast playback
   const mp4Avc = playbacks.find((p) => p.name === "mp4Avc");
   if (mp4Avc) return mp4Avc.url;
+
+  // Fall back to any mp4
+  const mp4 = playbacks.find((p) => p.name?.toLowerCase().includes("mp4"));
+  if (mp4) return mp4.url;
 
   return playbacks[0]?.url || null;
 }

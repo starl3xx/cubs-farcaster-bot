@@ -12,5 +12,13 @@
       "path": "/api/cron/check-odds",
       "schedule": "0 14 * * 1"
     }
-  ]
+  ],
+  "functions": {
+    "pages/api/cron/check-games.ts": {
+      "maxDuration": 300
+    },
+    "pages/api/manual/post-game.ts": {
+      "maxDuration": 300
+    }
+  }
 }
