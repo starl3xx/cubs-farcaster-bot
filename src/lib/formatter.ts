@@ -153,22 +153,18 @@ function formatDecisions(
 
 export interface MediaEmbeds {
   embeds: string[];
-  /** Raw mp4 URL from MLB CDN — needs re-hosting before embedding */
-  videoMp4Url?: string;
   /** Editorial recap photo URL — used as video poster/thumbnail */
   posterUrl?: string;
 }
 
 /**
  * Extract the best media embed from game content.
- * Priority: recap video (mp4) > editorial recap photo > any highlight video
+ * Priority: recap video (HLS) > editorial recap photo > any highlight video
  *
- * Returns both the embed URLs and the raw mp4 URL separately so the caller
- * can re-host the video on a fast CDN (Vercel Blob) for native playback.
+ * Prefers HLS (.m3u8) URLs which Warpcast plays as native inline video.
  */
 export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
   const embeds: string[] = [];
-  let videoMp4Url: string | undefined;
 
   // 1. Try recap video, fall back to top Cubs play highlight
   let videoResult = extractHighlightUrl(content);
@@ -178,8 +174,7 @@ export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
   const posterUrl = extractEditorialPhoto(content) || undefined;
 
   if (videoResult) {
-    embeds.push(videoResult.mp4Url);
-    videoMp4Url = videoResult.mp4Url;
+    embeds.push(videoResult.url);
   } else {
     // Fall back to editorial recap photo only when no video is available
     if (posterUrl) {
@@ -187,16 +182,16 @@ export function extractMediaEmbeds(content: GameContent): MediaEmbeds {
     }
   }
 
-  return { embeds, videoMp4Url, posterUrl };
+  return { embeds, posterUrl };
 }
 
 interface HighlightResult {
-  mp4Url: string;
+  url: string;
 }
 
 /**
- * Extract the recap highlight video mp4 URL from game content.
- * Returns the raw mp4 URL for re-hosting on a fast CDN.
+ * Extract the recap highlight video URL from game content.
+ * Prefers HLS (.m3u8) for native Warpcast playback, falls back to mp4.
  */
 export function extractHighlightUrl(content: GameContent): HighlightResult | null {
   // Try media.epg first (newer format)
@@ -204,7 +199,7 @@ export function extractHighlightUrl(content: GameContent): HighlightResult | nul
     for (const epg of content.media.epg) {
       if (epg.title === "Recap" && epg.items?.length) {
         const url = findBestPlayback(epg.items[0].playbacks);
-        if (url) return { mp4Url: url };
+        if (url) return { url };
       }
     }
   }
@@ -214,7 +209,7 @@ export function extractHighlightUrl(content: GameContent): HighlightResult | nul
     for (const item of content.media.highlights.highlights.items) {
       if (isRecapItem(item)) {
         const url = findBestPlayback(item.playbacks);
-        if (url) return { mp4Url: url };
+        if (url) return { url };
       }
     }
   }
@@ -224,7 +219,7 @@ export function extractHighlightUrl(content: GameContent): HighlightResult | nul
     for (const item of content.highlights.highlights.items) {
       if (isRecapItem(item)) {
         const url = findBestPlayback(item.playbacks);
-        if (url) return { mp4Url: url };
+        if (url) return { url };
       }
     }
   }
@@ -253,7 +248,7 @@ function extractCubsHighlightUrl(content: GameContent): HighlightResult | null {
 
     if (isCubs && isPlayHighlight) {
       const url = findBestPlayback(item.playbacks);
-      if (url) return { mp4Url: url };
+      if (url) return { url };
     }
   }
 
@@ -297,15 +292,18 @@ function extractEditorialPhoto(content: GameContent): string | null {
 function findBestPlayback(playbacks?: Playback[]): string | null {
   if (!playbacks?.length) return null;
 
-  // Prefer mp4Avc (best Farcaster compatibility)
+  // Prefer HLS (.m3u8) — Warpcast plays these as native inline video
+  const hls = playbacks.find((p) => p.name === "hlsCloud");
+  if (hls) return hls.url;
+
+  // Fall back to any HLS stream
+  const anyHls = playbacks.find((p) => p.url?.includes(".m3u8"));
+  if (anyHls) return anyHls.url;
+
+  // Fall back to mp4 (renders as link preview, but better than nothing)
   const mp4Avc = playbacks.find((p) => p.name === "mp4Avc");
   if (mp4Avc) return mp4Avc.url;
 
-  // Fall back to any mp4
-  const mp4 = playbacks.find((p) => p.name?.toLowerCase().includes("mp4"));
-  if (mp4) return mp4.url;
-
-  // Last resort: first available
   return playbacks[0]?.url || null;
 }
 

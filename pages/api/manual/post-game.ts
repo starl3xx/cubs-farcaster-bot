@@ -2,7 +2,6 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getGameFeed, getGameContent } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
-import { rehostVideo } from "../../../src/lib/video";
 import { isGamePosted, markGamePosted } from "../../../src/lib/store";
 
 export default async function handler(
@@ -34,21 +33,10 @@ export default async function handler(
       getGameContent(gamePk),
     ]);
 
-    const { embeds: mediaUrls, videoMp4Url, posterUrl } = extractMediaEmbeds(content);
+    const { embeds: mediaUrls } = extractMediaEmbeds(content);
     const text = formatBoxScoreCast(feed);
 
-    // Re-host video on Vercel Blob and wrap with OG page for native Warpcast playback
-    let finalUrls = mediaUrls;
-    if (videoMp4Url) {
-      const embedUrl = await rehostVideo(videoMp4Url, String(gamePk), posterUrl);
-      if (embedUrl) {
-        finalUrls = [embedUrl];
-      } else {
-        finalUrls = mediaUrls.filter((url) => url !== videoMp4Url);
-      }
-    }
-
-    const embeds = finalUrls.map((url) => ({ url }));
+    const embeds = mediaUrls.map((url) => ({ url }));
 
     const result = await postToChannel(text, {
       embeds,
@@ -63,7 +51,7 @@ export default async function handler(
       ok: true,
       gamePk,
       text,
-      mediaUrls: finalUrls,
+      mediaUrls,
       posted: !!result.hash,
       castHash: result.hash || null,
       error: result.error || null,

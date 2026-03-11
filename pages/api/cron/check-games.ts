@@ -2,7 +2,6 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getSchedule, getGameFeed, getGameContent, getGameDates } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractHighlightUrl, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
-import { rehostVideo } from "../../../src/lib/video";
 import {
   isGamePosted,
   markGamePosted,
@@ -80,21 +79,9 @@ export default async function handler(
 
       // Format and post
       const text = formatBoxScoreCast(feed, game.gameNumber > 1 ? game.gameNumber : undefined);
-      const { embeds: mediaUrls, videoMp4Url, posterUrl } = extractMediaEmbeds(content);
+      const { embeds: mediaUrls } = extractMediaEmbeds(content);
 
-      // Re-host video on Vercel Blob and wrap with OG page for native Warpcast playback
-      let finalUrls = mediaUrls;
-      if (videoMp4Url) {
-        const embedUrl = await rehostVideo(videoMp4Url, String(gamePk), posterUrl);
-        if (embedUrl) {
-          finalUrls = [embedUrl];
-        } else {
-          // Re-host failed — drop the video embed, keep photo only
-          finalUrls = mediaUrls.filter((url) => url !== videoMp4Url);
-        }
-      }
-
-      const embeds = finalUrls.map((url) => ({ url }));
+      const embeds = mediaUrls.map((url) => ({ url }));
 
       const result = await postToChannel(text, {
         embeds,
