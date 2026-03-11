@@ -1,15 +1,12 @@
 import { put } from "@vercel/blob";
 import { saveVideoBlob } from "./store";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://cubs-farcaster-bot.vercel.app";
-
 /**
- * Download an mp4 from a remote URL, re-host it on Vercel Blob, store the
- * blob URL in Redis, and return a short OG wrapper URL for the cast embed.
+ * Download an mp4 from a remote URL, re-host it on Vercel Blob, and return
+ * the direct blob URL for the cast embed.
  *
- * The embed URL is just /api/video/{slug} — no query params — to stay well
- * under Farcaster's 256-byte embed limit. The OG wrapper page looks up the
- * blob URL from Redis and serves og:video meta tags.
+ * Warpcast plays direct mp4 URLs as native inline video. OG wrapper pages
+ * only render as link previews (image + title), not playable video.
  */
 export async function rehostVideo(
   mp4Url: string,
@@ -34,13 +31,13 @@ export async function rehostVideo(
 
     console.log(`[video] Re-hosted to Vercel Blob: ${blob.url}`);
 
-    // Store blob URL in Redis so the OG wrapper page can look it up
+    // Store blob URL in Redis (kept for poster lookup / debugging)
     await saveVideoBlob(slug, { blobUrl: blob.url, posterUrl });
 
-    // Short embed URL — no query params, under 256 bytes
-    const embedUrl = `${APP_URL}/api/video/${slug}`;
-    console.log(`[video] Embed URL: ${embedUrl}`);
-    return embedUrl;
+    // Return the direct mp4 blob URL — Warpcast plays it as native video.
+    // (OG wrapper pages render as link previews, not inline video.)
+    console.log(`[video] Embed URL (direct mp4): ${blob.url}`);
+    return blob.url;
   } catch (err) {
     console.error("[video] Re-host failed:", err);
     return null;
