@@ -65,6 +65,15 @@ export async function uploadToFarcasterStream(
 
     // 4. Poll until the video is ready
     const embedUrl = await pollForReady(videoId);
+
+    if (embedUrl) {
+      // Wait for Farcaster's embed classifier to index the video.
+      // Without this delay, POST /v2/casts receives the URL before the
+      // classifier knows it's a video, resulting in "No preview found".
+      console.log("[video] Waiting 15s for embed classifier to index...");
+      await new Promise((r) => setTimeout(r, 15_000));
+    }
+
     return embedUrl;
   } catch (err) {
     console.error("[video] Farcaster video upload failed:", err);
