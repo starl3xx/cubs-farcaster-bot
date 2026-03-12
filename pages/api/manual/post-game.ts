@@ -68,8 +68,6 @@ export default async function handler(
       posted: !!result.hash,
       castHash: result.hash || null,
       error: result.error || null,
-      hasVideo,
-      _debug: result._debug || null,
     });
   } catch (err) {
     console.error("[post-game] Error:", err);

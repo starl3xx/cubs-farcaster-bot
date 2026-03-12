@@ -35,13 +35,11 @@ async function getChannelParentUrl(): Promise<string> {
 export interface PostResult {
   hash: string;
   error?: undefined;
-  _debug?: Record<string, unknown>;
 }
 
 export interface PostError {
   hash?: undefined;
   error: string;
-  _debug?: Record<string, unknown>;
 }
 
 interface PostOptions {
@@ -69,7 +67,6 @@ export async function postToChannel(
   }
 
   // Use Farcaster's own API for video casts (Neynar's unfurler can't classify video URLs)
-  console.log(`[post] hasVideo=${options.hasVideo}, embeds=${JSON.stringify(options.embeds?.map(e => e.url))}`);
   if (options.hasVideo) {
     return postViaFarcasterApi(text, options);
   }
@@ -87,7 +84,7 @@ export async function postToChannel(
     });
 
     console.log("[neynar] Cast published:", response.cast.hash);
-    return { hash: response.cast.hash, _debug: { via: "neynar" } };
+    return { hash: response.cast.hash };
   } catch (err: any) {
     const message = err?.response?.data
       ? JSON.stringify(err.response.data)
@@ -117,7 +114,7 @@ async function postViaFarcasterApi(
       channelKey: "cubs", // Farcaster API requires exact channel slug
     };
 
-    console.log(`[fc-api] Request body: ${JSON.stringify(body)}`);
+    console.log("[fc-api] Posting cast via Farcaster API with video embed...");
     const res = await fcFetch("/v2/casts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -132,11 +129,10 @@ async function postViaFarcasterApi(
 
     const data = await res.json();
     const hash = data.result?.cast?.hash;
-    const castEmbeds = data.result?.cast?.embeds;
 
     if (hash) {
-      console.log(`[fc-api] Cast published: ${hash}, embeds: ${JSON.stringify(castEmbeds)}`);
-      return { hash, _debug: { via: "farcaster-api", embeds: castEmbeds } };
+      console.log("[fc-api] Cast published:", hash);
+      return { hash };
     }
 
     console.error("[fc-api] No hash in response:", JSON.stringify(data));
