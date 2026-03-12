@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getGameFeed, getGameContent } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
-import { uploadToCloudflareStream } from "../../../src/lib/video";
+import { uploadToFarcasterStream } from "../../../src/lib/video";
 import { isGamePosted, markGamePosted } from "../../../src/lib/store";
 
 export default async function handler(
@@ -37,10 +37,10 @@ export default async function handler(
     const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
     const text = formatBoxScoreCast(feed);
 
-    // Upload video to Livepeer for native Warpcast playback
+    // Upload video to Farcaster Stream for native inline playback
     let finalUrls = mediaUrls;
     if (videoMp4Url) {
-      const playbackUrl = await uploadToCloudflareStream(videoMp4Url, String(gamePk));
+      const playbackUrl = await uploadToFarcasterStream(videoMp4Url, String(gamePk));
       if (playbackUrl) {
         finalUrls = [playbackUrl];
       }

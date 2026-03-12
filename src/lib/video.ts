@@ -1,24 +1,16 @@
-const CF_API = "https://api.cloudflare.com/client/v4";
+import { fcFetch } from "./farcaster-auth";
 
 /**
- * Upload an mp4 to Cloudflare Stream and return an HLS playback URL.
+ * Upload an mp4 to Farcaster's video infrastructure and return a native
+ * playback URL that renders as inline video in Farcaster clients.
  *
- * Flow: download mp4 → upload to Cloudflare Stream via direct upload →
- * poll until ready → return HLS URL using customer subdomain.
+ * Flow: download mp4 → prepare upload → TUS upload to stream.farcaster.xyz →
+ * poll until ready → return embed URL.
  */
-export async function uploadToCloudflareStream(
+export async function uploadToFarcasterStream(
   mp4Url: string,
-  slug: string
+  _slug: string
 ): Promise<string | null> {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-  const customerSubdomain = process.env.CLOUDFLARE_CUSTOMER_SUBDOMAIN;
-
-  if (!accountId || !apiToken || !customerSubdomain) {
-    console.error("[video] Missing Cloudflare Stream env vars");
-    return null;
-  }
-
   try {
     // 1. Download the mp4 into memory
     console.log(`[video] Downloading mp4: ${mp4Url}`);
@@ -27,110 +19,156 @@ export async function uploadToCloudflareStream(
       console.error(`[video] Failed to fetch mp4: ${dlResponse.status}`);
       return null;
     }
-    const videoBuffer = Buffer.from(await dlResponse.arrayBuffer());
-    console.log(`[video] Downloaded ${(videoBuffer.length / 1024 / 1024).toFixed(1)}MB`);
+    const videoBuffer = new Uint8Array(await dlResponse.arrayBuffer());
+    const sizeMB = (videoBuffer.length / 1024 / 1024).toFixed(1);
+    console.log(`[video] Downloaded ${sizeMB}MB`);
 
-    // 2. Request a direct upload URL from Cloudflare Stream
-    const createRes = await fetch(
-      `${CF_API}/accounts/${accountId}/stream/direct_upload`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          maxDurationSeconds: 600, // 10 min max for highlights
-          meta: { name: `cubs-highlight-${slug}` },
-        }),
-      }
-    );
-
-    if (!createRes.ok) {
-      console.error(`[video] CF direct_upload failed: ${createRes.status} ${await createRes.text()}`);
-      return null;
-    }
-
-    const createData = await createRes.json();
-    const uploadUrl: string = createData.result?.uploadURL;
-    const videoUid: string = createData.result?.uid;
-
-    if (!uploadUrl || !videoUid) {
-      console.error("[video] Missing upload data from CF:", JSON.stringify(createData));
-      return null;
-    }
-
-    console.log(`[video] CF video created: ${videoUid}`);
-
-    // 3. Upload the video file
-    const formData = new FormData();
-    formData.append("file", new Blob([videoBuffer], { type: "video/mp4" }), `${slug}.mp4`);
-
-    const uploadRes = await fetch(uploadUrl, {
+    // 2. Prepare the upload — get a videoId and TUS upload URL
+    console.log("[video] Preparing Farcaster video upload...");
+    const prepareRes = await fcFetch("/v1/prepare-video-upload", {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        videoSizeBytes: videoBuffer.length,
+        supportsDynamicUpload: true,
+      }),
     });
 
-    if (!uploadRes.ok) {
-      console.error(`[video] CF upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
+    if (!prepareRes.ok) {
+      const errText = await prepareRes.text();
+      console.error(`[video] prepare-video-upload failed: ${prepareRes.status} ${errText}`);
+      return null;
+    }
+
+    const prepareData = await prepareRes.json();
+    const result = prepareData.result;
+    const videoId: string | undefined = result?.videoId;
+    const uploadUrl: string | undefined = result?.uploadUrl;
+
+    if (!videoId || !uploadUrl) {
+      console.error("[video] Missing videoId/uploadUrl:", JSON.stringify(prepareData));
+      return null;
+    }
+
+    console.log(`[video] Video prepared: ${videoId}`);
+
+    // 3. Upload via TUS protocol to the provided upload URL
+    console.log(`[video] Uploading ${sizeMB}MB via TUS...`);
+    const uploaded = await tusUpload(uploadUrl, videoBuffer);
+
+    if (!uploaded) {
+      console.error("[video] TUS upload failed");
       return null;
     }
 
     console.log("[video] Upload complete, waiting for processing...");
 
     // 4. Poll until the video is ready
-    const playbackUrl = await pollForReady(accountId, apiToken, videoUid, customerSubdomain);
-    return playbackUrl;
+    const embedUrl = await pollForReady(videoId);
+    return embedUrl;
   } catch (err) {
-    console.error("[video] Cloudflare Stream upload failed:", err);
+    console.error("[video] Farcaster video upload failed:", err);
     return null;
   }
 }
 
 /**
- * Poll Cloudflare Stream video status until ready, then return the HLS playback URL.
+ * Upload video using TUS protocol (resumable upload).
+ * Uses a single creation + data request for simplicity since files are <100MB.
+ */
+async function tusUpload(endpoint: string, data: Uint8Array): Promise<boolean> {
+  try {
+    // TUS creation request — no Content-Type (causes 415 on Farcaster's proxy)
+    const createRes = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Tus-Resumable": "1.0.0",
+        "Upload-Length": String(data.length),
+        "Upload-Metadata": `filename ${btoa("video.mp4")},filetype ${btoa("video/mp4")}`,
+      },
+    });
+
+    if (createRes.status !== 201 && !createRes.ok) {
+      console.error(`[video] TUS create failed: ${createRes.status} ${await createRes.text()}`);
+      return false;
+    }
+
+    // The Location header contains the Cloudflare Stream URL for the PATCH upload
+    const location = createRes.headers.get("location");
+    if (!location) {
+      console.error("[video] TUS create returned no Location header");
+      return false;
+    }
+    console.log(`[video] TUS location: ${location}`);
+
+    // TUS PATCH — send the full file in one go to the Cloudflare Stream URL
+    const patchRes = await fetch(location, {
+      method: "PATCH",
+      headers: {
+        "Tus-Resumable": "1.0.0",
+        "Upload-Offset": "0",
+        "Content-Type": "application/offset+octet-stream",
+      },
+      body: data as unknown as BodyInit,
+    });
+
+    if (patchRes.status === 204 || patchRes.ok) {
+      console.log("[video] TUS upload succeeded");
+      return true;
+    }
+
+    console.error(`[video] TUS PATCH failed: ${patchRes.status} ${await patchRes.text()}`);
+    return false;
+  } catch (err) {
+    console.error("[video] TUS upload error:", err);
+    return false;
+  }
+}
+
+/**
+ * Poll Farcaster's uploaded-video endpoint until the video is ready.
  * Timeout after ~3 minutes.
  */
-async function pollForReady(
-  accountId: string,
-  apiToken: string,
-  videoUid: string,
-  customerSubdomain: string
-): Promise<string | null> {
+async function pollForReady(videoId: string): Promise<string | null> {
   const maxAttempts = 36; // 36 * 5s = 180s
   const interval = 5000;
 
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, interval));
 
-    const res = await fetch(
-      `${CF_API}/accounts/${accountId}/stream/${videoUid}`,
-      { headers: { Authorization: `Bearer ${apiToken}` } }
-    );
+    try {
+      const res = await fcFetch(`/v1/uploaded-video?videoId=${videoId}`);
 
-    if (!res.ok) {
-      console.error(`[video] Poll failed: ${res.status}`);
-      continue;
+      if (!res.ok) {
+        console.error(`[video] Poll failed: ${res.status}`);
+        continue;
+      }
+
+      const data = await res.json();
+      const video = data.result?.video;
+      const embed = video?.embed;
+
+      // Check for ready state
+      if (embed?.url || embed?.sourceUrl) {
+        const embedUrl = embed.sourceUrl || embed.url;
+        console.log(`[video] Video ready! Embed URL: ${embedUrl}`);
+        if (embed.width) console.log(`[video] Dimensions: ${embed.width}x${embed.height}`);
+        return embedUrl;
+      }
+
+      const state = video?.state || data.result?.state;
+
+      if (state === "error" || state === "failed") {
+        console.error("[video] Processing failed:", JSON.stringify(data.result));
+        return null;
+      }
+
+      console.log(`[video] Processing... (${state || "unknown"}, attempt ${i + 1}/${maxAttempts})`);
+    } catch (err) {
+      console.error(`[video] Poll error:`, err);
     }
-
-    const data = await res.json();
-    const status = data.result?.status;
-
-    if (status?.state === "ready") {
-      // Use customer subdomain for playback URL
-      const url = `https://${customerSubdomain}/${videoUid}/manifest/video.m3u8`;
-      console.log(`[video] Video ready! Playback URL: ${url}`);
-      return url;
-    }
-
-    if (status?.state === "error") {
-      console.error("[video] CF processing failed:", status?.errorReasonCode);
-      return null;
-    }
-
-    console.log(`[video] Processing... (${status?.state}, attempt ${i + 1}/${maxAttempts})`);
   }
 
-  console.error("[video] Timed out waiting for CF processing");
+  console.error("[video] Timed out waiting for processing");
   return null;
 }
