@@ -84,10 +84,12 @@ export default async function handler(
 
       // Upload video to Farcaster Stream for native inline playback
       let finalUrls = mediaUrls;
+      let hasVideo = false;
       if (videoMp4Url) {
         const playbackUrl = await uploadToFarcasterStream(videoMp4Url, String(gamePk));
         if (playbackUrl) {
           finalUrls = [playbackUrl];
+          hasVideo = true;
         }
         // If upload fails, finalUrls stays as mediaUrls (photo fallback)
       }
@@ -97,6 +99,7 @@ export default async function handler(
       const result = await postToChannel(text, {
         embeds,
         idem: `game-${gamePk}`,
+        hasVideo,
       });
 
       if (result.hash) {
