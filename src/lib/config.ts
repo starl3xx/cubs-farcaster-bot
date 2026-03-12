@@ -29,7 +29,7 @@ export const MAX_HIGHLIGHT_RETRIES = 12;
 
 // News: only consider articles from the last 4 hours (2hr cron + buffer)
 export const NEWS_LOOKBACK_MS = 4 * 60 * 60 * 1000;
-export const NEWS_SIGNIFICANCE_THRESHOLD = 25;
+export const NEWS_SIGNIFICANCE_THRESHOLD = 50;
 
 // RSS feed URL
 export const CUBS_RSS_URL = "https://www.mlb.com/cubs/feeds/news/rss.xml";

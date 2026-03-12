@@ -52,7 +52,7 @@ Vercel Cron
 | Route | Schedule | Description |
 |-------|----------|-------------|
 | `/api/cron/check-games` | Every 5 min | Checks today's and yesterday's schedule for final Cubs games. Uploads highlight video and posts box score cast. Retries up to 12 times (1 hour) waiting for highlight availability. |
-| `/api/cron/check-news` | Every 2 hours | Fetches Cubs RSS feed, scores articles by significance (0-100), posts articles scoring >= 25. Filters out trivia, podcasts, and sweepstakes. |
+| `/api/cron/check-news` | Every 2 hours | Fetches Cubs RSS feed, scores articles by significance (0-100), posts articles scoring >= 50. Filters out trivia, podcasts, and sweepstakes. |
 | `/api/cron/check-odds` | Mondays 2 PM UTC | Fetches Cubs World Series and NL Central odds from Polymarket. Posts weekly update with deltas. Cross-posts to Twitter. |
 
 ### Manual triggers
