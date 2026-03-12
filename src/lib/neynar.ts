@@ -35,11 +35,13 @@ async function getChannelParentUrl(): Promise<string> {
 export interface PostResult {
   hash: string;
   error?: undefined;
+  _debug?: Record<string, unknown>;
 }
 
 export interface PostError {
   hash?: undefined;
   error: string;
+  _debug?: Record<string, unknown>;
 }
 
 interface PostOptions {
@@ -85,7 +87,7 @@ export async function postToChannel(
     });
 
     console.log("[neynar] Cast published:", response.cast.hash);
-    return { hash: response.cast.hash };
+    return { hash: response.cast.hash, _debug: { via: "neynar" } };
   } catch (err: any) {
     const message = err?.response?.data
       ? JSON.stringify(err.response.data)
@@ -130,11 +132,11 @@ async function postViaFarcasterApi(
 
     const data = await res.json();
     const hash = data.result?.cast?.hash;
-    const videoEmbeds = data.result?.cast?.embeds?.videos;
+    const castEmbeds = data.result?.cast?.embeds;
 
     if (hash) {
-      console.log(`[fc-api] Cast published: ${hash}, videos: ${JSON.stringify(videoEmbeds?.length ?? 0)}`);
-      return { hash };
+      console.log(`[fc-api] Cast published: ${hash}, embeds: ${JSON.stringify(castEmbeds)}`);
+      return { hash, _debug: { via: "farcaster-api", embeds: castEmbeds } };
     }
 
     console.error("[fc-api] No hash in response:", JSON.stringify(data));
