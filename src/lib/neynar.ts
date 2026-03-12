@@ -67,6 +67,7 @@ export async function postToChannel(
   }
 
   // Use Farcaster's own API for video casts (Neynar's unfurler can't classify video URLs)
+  console.log(`[post] hasVideo=${options.hasVideo}, embeds=${JSON.stringify(options.embeds?.map(e => e.url))}`);
   if (options.hasVideo) {
     return postViaFarcasterApi(text, options);
   }
@@ -114,7 +115,7 @@ async function postViaFarcasterApi(
       channelKey: "cubs", // Farcaster API requires exact channel slug
     };
 
-    console.log(`[fc-api] Posting cast via Farcaster API with video embed (CHANNEL_ID env="${CHANNEL_ID}")...`);
+    console.log(`[fc-api] Request body: ${JSON.stringify(body)}`);
     const res = await fcFetch("/v2/casts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -129,9 +130,10 @@ async function postViaFarcasterApi(
 
     const data = await res.json();
     const hash = data.result?.cast?.hash;
+    const videoEmbeds = data.result?.cast?.embeds?.videos;
 
     if (hash) {
-      console.log("[fc-api] Cast published:", hash);
+      console.log(`[fc-api] Cast published: ${hash}, videos: ${JSON.stringify(videoEmbeds?.length ?? 0)}`);
       return { hash };
     }
 
