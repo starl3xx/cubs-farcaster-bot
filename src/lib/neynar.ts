@@ -111,10 +111,10 @@ async function postViaFarcasterApi(
     const body: Record<string, unknown> = {
       text,
       embeds: embedUrls,
-      channelKey: CHANNEL_ID,
+      channelKey: "cubs", // Farcaster API requires exact channel slug
     };
 
-    console.log("[fc-api] Posting cast via Farcaster API with video embed...");
+    console.log(`[fc-api] Posting cast via Farcaster API with video embed (CHANNEL_ID env="${CHANNEL_ID}")...`);
     const res = await fcFetch("/v2/casts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
