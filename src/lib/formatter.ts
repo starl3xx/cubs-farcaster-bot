@@ -231,31 +231,39 @@ export function extractHighlightUrl(content: GameContent): HighlightResult | nul
 }
 
 /**
- * Extract the top Cubs play highlight when no recap video exists.
- * Filters for in-game-highlight videos tagged with the Cubs team.
- * Uses in-game-highlight (not game-story-highlight) because exhibition
- * games don't have the game-story-highlight taxonomy.
+ * Extract the top Cubs highlight when no recap video exists.
+ * Priority: in-game-highlight → data-visualization (pitch breakdowns, etc.)
+ * Always filtered to Cubs-tagged videos only (never opposing team).
  */
 function extractCubsHighlightUrl(content: GameContent): HighlightResult | null {
   const items = content.highlights?.highlights?.items;
   if (!items?.length) return null;
 
   const cubsTag = `teamid-${CUBS_TEAM_ID}`;
+  let dataVizFallback: HighlightResult | null = null;
 
   for (const item of items) {
     if (item.type !== "video") continue;
 
     const kw = item.keywordsAll || [];
     const isCubs = kw.some((k) => k.value === cubsTag);
-    const isPlayHighlight = kw.some((k) => k.value === "in-game-highlight");
+    if (!isCubs) continue;
 
-    if (isCubs && isPlayHighlight) {
+    const isPlayHighlight = kw.some((k) => k.value === "in-game-highlight");
+    const isDataViz = kw.some((k) => k.value === "in-game-data-visualization");
+
+    if (isPlayHighlight) {
       const url = findBestPlayback(item.playbacks);
       if (url) return { url };
     }
+
+    if (isDataViz && !dataVizFallback) {
+      const url = findBestPlayback(item.playbacks);
+      if (url) dataVizFallback = { url };
+    }
   }
 
-  return null;
+  return dataVizFallback;
 }
 
 function isRecapItem(item: { type: string; title: string; keywordsAll?: { type: string; value: string }[] }): boolean {
