@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getSchedule, getGameFeed, getGameContent, getGameDates } from "../../../src/lib/mlb-api";
-import { formatBoxScoreCast, extractHighlightUrl, extractMediaEmbeds } from "../../../src/lib/formatter";
+import { formatBoxScoreCast, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
 import { uploadToFarcasterStream } from "../../../src/lib/video";
 import {
@@ -67,12 +67,12 @@ export default async function handler(
         getGameContent(gamePk),
       ]);
 
-      // Check for highlight video
-      const highlightResult = extractHighlightUrl(content);
+      // Check for any video (recap or Cubs play highlight)
+      const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
       const retryCount = await getGameTracking(gamePk);
 
-      if (!highlightResult && retryCount < MAX_HIGHLIGHT_RETRIES) {
-        // No highlight yet, wait and retry
+      if (!videoMp4Url && retryCount < MAX_HIGHLIGHT_RETRIES) {
+        // No video yet, wait and retry
         await incrementGameTracking(gamePk);
         results[`game_${gamePk}`] = `waiting for highlight (retry ${retryCount + 1}/${MAX_HIGHLIGHT_RETRIES})`;
         continue;
@@ -80,7 +80,6 @@ export default async function handler(
 
       // Format and post
       const text = formatBoxScoreCast(feed, game.gameNumber > 1 ? game.gameNumber : undefined);
-      const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
 
       // Upload video to Farcaster Stream for native inline playback
       let finalUrls = mediaUrls;
