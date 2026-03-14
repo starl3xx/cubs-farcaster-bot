@@ -70,8 +70,12 @@ export async function uploadToFarcasterStream(
       // Wait for Farcaster's embed classifier to index the video.
       // Without this delay, POST /v2/casts receives the URL before the
       // classifier knows it's a video, resulting in "No preview found".
-      console.log("[video] Waiting 15s for embed classifier to index...");
-      await new Promise((r) => setTimeout(r, 15_000));
+      // We verify the URL is fetchable before proceeding.
+      console.log("[video] Waiting for embed classifier to index...");
+      const verified = await waitForEmbedReady(embedUrl);
+      if (!verified) {
+        console.warn("[video] Embed URL never became fetchable — posting anyway");
+      }
     }
 
     return embedUrl;
@@ -79,6 +83,40 @@ export async function uploadToFarcasterStream(
     console.error("[video] Farcaster video upload failed:", err);
     return null;
   }
+}
+
+/**
+ * Wait for the embed URL to become fetchable, then add extra buffer time
+ * for Farcaster's embed classifier to index the video. The classifier is
+ * a separate service from the CDN — the video can be playable before the
+ * classifier registers it, causing "No preview found" on the cast.
+ *
+ * Strategy: poll HEAD until the CDN serves the video, then wait an
+ * additional 30s for the classifier to catch up.
+ */
+async function waitForEmbedReady(url: string): Promise<boolean> {
+  const maxAttempts = 8; // 8 * 5s = 40s for CDN check
+  const interval = 5000;
+  const classifierBuffer = 30_000; // 30s after CDN is live
+
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, interval));
+
+    try {
+      const res = await fetch(url, { method: "HEAD" });
+      if (res.ok) {
+        console.log(`[video] Embed URL live on CDN (attempt ${i + 1}/${maxAttempts})`);
+        console.log(`[video] Waiting ${classifierBuffer / 1000}s for embed classifier...`);
+        await new Promise((r) => setTimeout(r, classifierBuffer));
+        return true;
+      }
+      console.log(`[video] Embed URL not ready: ${res.status} (attempt ${i + 1}/${maxAttempts})`);
+    } catch (err) {
+      console.log(`[video] Embed URL fetch error (attempt ${i + 1}/${maxAttempts}):`, err);
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -157,10 +195,15 @@ async function pollForReady(videoId: string): Promise<string | null> {
       const video = data.result?.video;
       const embed = video?.embed;
 
-      // Check for ready state
+      // Check for ready state — prefer `url` (the canonical stream.farcaster.xyz
+      // URL that the embed classifier recognizes) over `sourceUrl` (which may be
+      // a raw Cloudflare Stream URL the classifier doesn't index).
       if (embed?.url || embed?.sourceUrl) {
-        const embedUrl = embed.sourceUrl || embed.url;
+        const embedUrl = embed.url || embed.sourceUrl;
         console.log(`[video] Video ready! Embed URL: ${embedUrl}`);
+        if (embed.sourceUrl && embed.url && embed.sourceUrl !== embed.url) {
+          console.log(`[video] (sourceUrl was: ${embed.sourceUrl})`);
+        }
         if (embed.width) console.log(`[video] Dimensions: ${embed.width}x${embed.height}`);
         return embedUrl;
       }
