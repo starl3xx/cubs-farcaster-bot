@@ -315,7 +315,11 @@ export function formatNewsCast(
   author: string | undefined,
   url: string
 ): string {
-  const parts = [`Cubs News: ${title}`];
-  if (author) parts.push("", `by ${author}`);
+  const parts = [`\u{1F4E3} Cubs news: ${title}`];
+  if (author) {
+    parts.push("", `\u270D\uFE0F ${author} | Read more \u{1F447}`);
+  } else {
+    parts.push("", `Read more \u{1F447}`);
+  }
   return parts.join("\n");
 }
