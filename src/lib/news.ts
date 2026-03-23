@@ -69,9 +69,9 @@ export function scoreSignificance(
     score += 40;
   }
 
-  // Significant roster/career moves (+35)
+  // Significant roster/career moves (+40)
   if (/\b(injur|disabled list|\bil\b|dfa|designat|retir|extension|extend|fired|hired|manager|coaching)\b/.test(text)) {
-    score += 35;
+    score += 40;
   }
 
   // Notable game events (+30)
