@@ -27,8 +27,8 @@ export const REDIS_TTL = {
 // Highlight retry: 12 retries × 5 min interval = 1 hour max wait
 export const MAX_HIGHLIGHT_RETRIES = 12;
 
-// News: only consider articles from the last 4 hours (2hr cron + buffer)
-export const NEWS_LOOKBACK_MS = 4 * 60 * 60 * 1000;
+// News: consider articles from the last 8 hours (2hr cron + RSS cache buffer)
+export const NEWS_LOOKBACK_MS = 8 * 60 * 60 * 1000;
 export const NEWS_SIGNIFICANCE_THRESHOLD = 50;
 
 // RSS feed URL
