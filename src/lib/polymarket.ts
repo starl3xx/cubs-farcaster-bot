@@ -5,7 +5,7 @@ const CUBS_TOKENS = {
   worldSeries: {
     tokenId: "11940406787186341071755148448116745833167346421729699368674725740151230699960",
     conditionId: "0xae0363bfe26b7de87f4526c47d5de9b324bab3d14690112bd89b34c9ed3552fc",
-    eventSlug: "pro-baseball-world-series-champion-2026",
+    eventSlug: "mlb-world-series-champion-2026",
     label: "World Series",
   },
   nlCentral: {
