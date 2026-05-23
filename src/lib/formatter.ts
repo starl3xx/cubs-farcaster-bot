@@ -1,5 +1,10 @@
 import { CUBS_TEAM_ID } from "./config";
-import type { GameFeed, GameContent, Playback } from "../types/mlb";
+import type {
+  GameFeed,
+  GameContent,
+  Playback,
+  CubsStanding,
+} from "../types/mlb";
 
 const GAME_TYPE_LABELS: Record<string, string> = {
   S: "Spring Training",
@@ -15,18 +20,19 @@ const GAME_TYPE_LABELS: Record<string, string> = {
  * Format a box score cast from MLB game feed data.
  *
  * Example output:
- * Spring Training: Cubs shut out Cardinals 2-0 — FINAL
+ * ⚾ FINAL: Astros 4, Cubs 2
  *
- * STL  000 000 000  0R 6H 0E
- * CHC  000 010 10x  2R 6H 0E
+ * HOU  001 210 000  4R 9H 2E
+ * CHC  000 002 000  2R 4H 0E
  *
- * W: Assad | L: King | S: Wicks
+ * W: S. Arrighetti | L: J. Taillon | S: B. King
  *
- * Wrigley Field
+ * 📋 Record/streak/rank: 29-22 (0.569) / L6 / 3rd in NL Central (2.5 GB)
  */
 export function formatBoxScoreCast(
   feed: GameFeed,
-  gameNumber?: number
+  gameNumber?: number,
+  standing?: CubsStanding | null
 ): string {
   const { gameData, liveData } = feed;
   const { linescore, decisions } = liveData;
@@ -36,65 +42,39 @@ export function formatBoxScoreCast(
   const awayRuns = linescore.teams.away.runs;
   const homeRuns = linescore.teams.home.runs;
 
-  const cubsAreHome = home.id === CUBS_TEAM_ID;
-  const cubsWon = cubsAreHome ? homeRuns > awayRuns : awayRuns > homeRuns;
-  const opponent = cubsAreHome ? away : home;
-  const cubsRuns = cubsAreHome ? homeRuns : awayRuns;
-  const opponentRuns = cubsAreHome ? awayRuns : homeRuns;
+  const awayWon = awayRuns > homeRuns;
+  const winner = awayWon ? away : home;
+  const loser = awayWon ? home : away;
+  const winnerRuns = awayWon ? awayRuns : homeRuns;
+  const loserRuns = awayWon ? homeRuns : awayRuns;
 
   // Game type prefix (Spring Training, Postseason, etc.)
   const gameType = gameData.game?.type || "R";
   const gameTypeLabel = GAME_TYPE_LABELS[gameType];
-  const prefix = gameTypeLabel ? `${gameTypeLabel}: ` : "";
+  const prefixLabel = gameTypeLabel ? `${gameTypeLabel} ` : "";
 
-  // Headline
-  const verb = getVerb(cubsWon, cubsRuns, opponentRuns);
+  // Headline: ⚾ [Spring Training ]FINAL: Winner X, Loser Y[ (10 inn.)][ (Game 2)]
   const doubleheaderTag =
     gameNumber && gameNumber > 1 ? ` (Game ${gameNumber})` : "";
   const extraInnings =
-    linescore.currentInning > 9
-      ? ` (${linescore.currentInning} inn.)`
-      : "";
-  const headline = cubsWon
-    ? `\u{1F4CB} ${prefix}Cubs ${verb} ${opponent.teamName} ${cubsRuns}-${opponentRuns}${extraInnings} — FINAL${doubleheaderTag}`
-    : `\u{1F4CB} ${prefix}${opponent.teamName} ${verb} Cubs ${opponentRuns}-${cubsRuns}${extraInnings} — FINAL${doubleheaderTag}`;
+    linescore.currentInning > 9 ? ` (${linescore.currentInning} inn.)` : "";
+  const headline = `⚾ ${prefixLabel}FINAL: ${winner.teamName} ${winnerRuns}, ${loser.teamName} ${loserRuns}${extraInnings}${doubleheaderTag}`;
 
   // Inning-by-inning line score
   const lineScore = formatLineScore(linescore, away.abbreviation, home.abbreviation);
 
-  // Decisions line
+  // Decisions line (no emoji prefix; first names abbreviated to first initial)
   const decisionsLine = formatDecisions(decisions);
 
-  // Venue
-  const venue = gameData.venue.name;
+  // Record/streak/rank footer. Standings are regular-season only — omit for
+  // spring training, exhibitions, and postseason where the line is misleading.
+  const standingsLine = gameType === "R" ? formatStandings(standing) : "";
 
   const parts = [headline, "", lineScore];
-  if (decisionsLine) parts.push("", `\u26BE ${decisionsLine}`);
-  parts.push("", `\u{1F3DF}\uFE0F ${venue}`);
+  if (decisionsLine) parts.push("", decisionsLine);
+  if (standingsLine) parts.push("", standingsLine);
 
   return parts.join("\n");
-}
-
-function getVerb(
-  cubsWon: boolean,
-  cubsRuns: number,
-  opponentRuns: number
-): string {
-  const diff = Math.abs(cubsRuns - opponentRuns);
-  const loserRuns = cubsWon ? opponentRuns : cubsRuns;
-
-  if (cubsWon) {
-    if (loserRuns === 0) return "shut out";
-    if (diff === 1) return "edge";
-    if (diff >= 7) return "rout";
-    if (diff >= 5) return "cruise past";
-    return "beat";
-  } else {
-    if (cubsRuns === 0) return "shut out";
-    if (diff === 1) return "edge";
-    if (diff >= 7) return "rout";
-    return "beat";
-  }
 }
 
 function formatLineScore(
@@ -144,11 +124,62 @@ function formatDecisions(
   if (!decisions) return "";
 
   const parts: string[] = [];
-  if (decisions.winner) parts.push(`W: ${decisions.winner.fullName}`);
-  if (decisions.loser) parts.push(`L: ${decisions.loser.fullName}`);
-  if (decisions.save) parts.push(`S: ${decisions.save.fullName}`);
+  if (decisions.winner) parts.push(`W: ${abbreviatePitcher(decisions.winner.fullName)}`);
+  if (decisions.loser) parts.push(`L: ${abbreviatePitcher(decisions.loser.fullName)}`);
+  if (decisions.save) parts.push(`S: ${abbreviatePitcher(decisions.save.fullName)}`);
 
   return parts.join(" | ");
+}
+
+/**
+ * Abbreviate "Spencer Arrighetti" → "S. Arrighetti". Single-token names pass
+ * through unchanged so we don't truncate something like "Ichiro".
+ */
+function abbreviatePitcher(fullName: string): string {
+  const tokens = fullName.trim().split(/\s+/);
+  if (tokens.length < 2) return fullName;
+  const [first, ...rest] = tokens;
+  const initial = first.charAt(0).toUpperCase();
+  return `${initial}. ${rest.join(" ")}`;
+}
+
+function formatStandings(standing?: CubsStanding | null): string {
+  if (!standing) return "";
+
+  const { wins, losses, winningPercentage, divisionRank, divisionGamesBack, streakCode } = standing;
+
+  // MLB API returns winningPercentage as ".569" — render as "0.569"
+  const pct = winningPercentage.startsWith(".")
+    ? `0${winningPercentage}`
+    : winningPercentage;
+
+  const rankClause =
+    divisionGamesBack && divisionGamesBack !== "-"
+      ? `${ordinal(divisionRank)} in NL Central (${divisionGamesBack} GB)`
+      : `${ordinal(divisionRank)} in NL Central`;
+
+  const segments = [`${wins}-${losses} (${pct})`];
+  if (streakCode) segments.push(streakCode);
+  segments.push(rankClause);
+
+  return `\u{1F4CB} Record/streak/rank: ${segments.join(" / ")}`;
+}
+
+function ordinal(rank: string): string {
+  const n = Number(rank);
+  if (!Number.isFinite(n)) return rank;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
 }
 
 export interface MediaEmbeds {

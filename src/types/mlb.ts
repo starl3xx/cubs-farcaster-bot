@@ -215,6 +215,38 @@ export interface Keyword {
   value: string;
 }
 
+// Standings
+export interface StandingsResponse {
+  records: StandingsRecord[];
+}
+
+export interface StandingsRecord {
+  standingsType: string;
+  league: { id: number };
+  division: { id: number };
+  teamRecords: TeamRecord[];
+}
+
+export interface TeamRecord {
+  team: { id: number; name: string };
+  wins: number;
+  losses: number;
+  winningPercentage: string;
+  divisionRank: string;
+  gamesBack: string;
+  divisionGamesBack: string;
+  streak?: { streakCode: string; streakType: string; streakNumber: number };
+}
+
+export interface CubsStanding {
+  wins: number;
+  losses: number;
+  winningPercentage: string;
+  divisionRank: string;
+  divisionGamesBack: string;
+  streakCode?: string;
+}
+
 // RSS feed types
 export interface RssItem {
   title: string;

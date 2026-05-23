@@ -3,7 +3,12 @@ import type {
   ScheduleResponse,
   GameFeed,
   GameContent,
+  StandingsResponse,
+  CubsStanding,
 } from "../types/mlb";
+
+// National League id in the MLB Stats API
+const NL_LEAGUE_ID = 104;
 
 export async function getSchedule(date: string): Promise<ScheduleResponse> {
   const url = `${MLB_API_BASE}/api/v1/schedule?teamId=${CUBS_TEAM_ID}&sportId=1&date=${date}&hydrate=team`;
@@ -24,6 +29,48 @@ export async function getGameContent(gamePk: number): Promise<GameContent> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`MLB game content API error: ${res.status}`);
   return res.json();
+}
+
+/**
+ * Fetch Cubs standings as of an optional date (YYYY-MM-DD). When unspecified,
+ * returns current standings. Returns null on any error so callers can fall back
+ * gracefully — standings are a "nice to have" for the post-game cast.
+ */
+export async function getCubsStanding(
+  date?: string
+): Promise<CubsStanding | null> {
+  try {
+    const season = (date ?? new Date().toISOString().slice(0, 10)).slice(0, 4);
+    const params = new URLSearchParams({
+      leagueId: String(NL_LEAGUE_ID),
+      season,
+      standingsTypes: "regularSeason",
+    });
+    if (date) params.set("date", date);
+
+    const url = `${MLB_API_BASE}/api/v1/standings?${params.toString()}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data: StandingsResponse = await res.json();
+
+    for (const record of data.records) {
+      const cubs = record.teamRecords.find((t) => t.team.id === CUBS_TEAM_ID);
+      if (cubs) {
+        return {
+          wins: cubs.wins,
+          losses: cubs.losses,
+          winningPercentage: cubs.winningPercentage,
+          divisionRank: cubs.divisionRank,
+          divisionGamesBack: cubs.divisionGamesBack,
+          streakCode: cubs.streak?.streakCode,
+        };
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn("[getCubsStanding] failed:", err);
+    return null;
+  }
 }
 
 /**
