@@ -60,6 +60,8 @@ export interface GameData {
   };
   datetime: {
     dateTime: string;
+    /** MLB-canonical game date in YYYY-MM-DD; immune to UTC rollover for night games. */
+    officialDate: string;
   };
   status: GameStatus;
 }
@@ -213,6 +215,38 @@ export interface Playback {
 export interface Keyword {
   type: string;
   value: string;
+}
+
+// Standings
+export interface StandingsResponse {
+  records: StandingsRecord[];
+}
+
+export interface StandingsRecord {
+  standingsType: string;
+  league: { id: number };
+  division: { id: number };
+  teamRecords: TeamRecord[];
+}
+
+export interface TeamRecord {
+  team: { id: number; name: string };
+  wins: number;
+  losses: number;
+  winningPercentage: string;
+  divisionRank: string;
+  gamesBack: string;
+  divisionGamesBack: string;
+  streak?: { streakCode: string; streakType: string; streakNumber: number };
+}
+
+export interface CubsStanding {
+  wins: number;
+  losses: number;
+  winningPercentage: string;
+  divisionRank: string;
+  divisionGamesBack: string;
+  streakCode?: string;
 }
 
 // RSS feed types

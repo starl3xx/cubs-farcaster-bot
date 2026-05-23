@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getSchedule, getGameFeed, getGameContent, getGameDates } from "../../../src/lib/mlb-api";
+import { getSchedule, getGameFeed, getGameContent, getGameDates, getCubsStanding } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
 import { uploadToFarcasterStream } from "../../../src/lib/video";
@@ -79,7 +79,12 @@ export default async function handler(
       }
 
       // Format and post
-      const text = formatBoxScoreCast(feed, game.gameNumber > 1 ? game.gameNumber : undefined);
+      const standing = await getCubsStanding(feed.gameData.datetime.officialDate);
+      const text = formatBoxScoreCast(
+        feed,
+        game.gameNumber > 1 ? game.gameNumber : undefined,
+        standing
+      );
 
       // Upload video to Farcaster Stream for native inline playback
       let finalUrls = mediaUrls;
