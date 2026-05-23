@@ -35,8 +35,7 @@ export default async function handler(
     ]);
 
     const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
-    const gameDate = feed.gameData.datetime.dateTime.slice(0, 10);
-    const standing = await getCubsStanding(gameDate);
+    const standing = await getCubsStanding(feed.gameData.datetime.officialDate);
     const text = formatBoxScoreCast(feed, undefined, standing);
 
     // Upload video to Farcaster Stream for native inline playback

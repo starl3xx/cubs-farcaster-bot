@@ -79,8 +79,7 @@ export default async function handler(
       }
 
       // Format and post
-      const gameDate = feed.gameData.datetime.dateTime.slice(0, 10);
-      const standing = await getCubsStanding(gameDate);
+      const standing = await getCubsStanding(feed.gameData.datetime.officialDate);
       const text = formatBoxScoreCast(
         feed,
         game.gameNumber > 1 ? game.gameNumber : undefined,

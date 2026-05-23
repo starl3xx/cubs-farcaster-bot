@@ -60,6 +60,8 @@ export interface GameData {
   };
   datetime: {
     dateTime: string;
+    /** MLB-canonical game date in YYYY-MM-DD; immune to UTC rollover for night games. */
+    officialDate: string;
   };
   status: GameStatus;
 }
