@@ -109,6 +109,77 @@ export async function getVideoBlob(slug: string): Promise<VideoBlob | null> {
   return getRedis().get<VideoBlob>(`${REDIS_KEYS.VIDEO_BLOB}${slug}`);
 }
 
+// Clinch / elimination tracking
+//
+// The bot is otherwise stateless, but these casts fire on a TRANSITION, so the
+// previously observed flags have to be persisted. Storing the whole snapshot
+// (rather than a per-event boolean) is what makes safe seeding possible: on the
+// very first run of a season there is no prior snapshot, so the caller records
+// what it sees and posts nothing.
+export interface ClinchState {
+  clinched: boolean;
+  divisionChamp: boolean;
+  bestInLeague: boolean;
+  eliminated: boolean;
+}
+
+export async function getClinchState(
+  season: string
+): Promise<ClinchState | null> {
+  return getRedis().get<ClinchState>(`${REDIS_KEYS.CLINCH_STATE}${season}`);
+}
+
+export async function saveClinchState(
+  season: string,
+  state: ClinchState
+): Promise<void> {
+  await getRedis().set(`${REDIS_KEYS.CLINCH_STATE}${season}`, state, {
+    ex: REDIS_TTL.CLINCH,
+  });
+}
+
+/**
+ * Second, independent guard on top of the state snapshot. If a cast posts but
+ * the state write then fails, this still prevents a repeat.
+ */
+export async function isClinchEventPosted(
+  season: string,
+  event: string
+): Promise<boolean> {
+  const result = await getRedis().get(
+    `${REDIS_KEYS.CLINCH_POSTED}${season}:${event}`
+  );
+  return result !== null;
+}
+
+export async function markClinchEventPosted(
+  season: string,
+  event: string,
+  castHash: string
+): Promise<void> {
+  await getRedis().set(
+    `${REDIS_KEYS.CLINCH_POSTED}${season}:${event}`,
+    castHash,
+    { ex: REDIS_TTL.CLINCH }
+  );
+}
+
+// Postseason series preview dedup, keyed on Game 1's gamePk. Postseason gamePks
+// are pre-allocated and stay stable when placeholder teams resolve to real ones.
+export async function isSeriesPreviewPosted(gamePk: number): Promise<boolean> {
+  const result = await getRedis().get(`${REDIS_KEYS.SERIES_PREVIEW}${gamePk}`);
+  return result !== null;
+}
+
+export async function markSeriesPreviewPosted(
+  gamePk: number,
+  castHash: string
+): Promise<void> {
+  await getRedis().set(`${REDIS_KEYS.SERIES_PREVIEW}${gamePk}`, castHash, {
+    ex: REDIS_TTL.SERIES_PREVIEW,
+  });
+}
+
 // Health check
 export async function getRedisStatus(): Promise<{
   connected: boolean;

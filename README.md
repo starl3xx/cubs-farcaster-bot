@@ -14,7 +14,9 @@ An automated bot that posts Chicago Cubs game recaps, news, and odds updates to 
 Vercel Cron
   ├── /api/cron/check-games    (every 5 min)
   ├── /api/cron/check-news     (every 2 hours)
-  └── /api/cron/check-odds     (Mondays 2 PM UTC)
+  ├── /api/cron/check-odds     (Mondays 2 PM UTC)
+  ├── /api/cron/check-clinch   (hourly)
+  └── /api/cron/check-series-preview (every 15 min)
          │
          ▼
   ┌─────────────┐    ┌──────────────┐    ┌──────────────────┐
@@ -54,6 +56,8 @@ Vercel Cron
 | `/api/cron/check-games` | Every 5 min | Checks today's and yesterday's schedule for final Cubs games. Uploads highlight video and posts box score cast. Retries up to 12 times (1 hour) waiting for highlight availability. |
 | `/api/cron/check-news` | Every 2 hours | Fetches Cubs RSS feed, scores articles by significance (0-100), posts articles scoring >= 50. Filters out trivia, podcasts, and sweepstakes. |
 | `/api/cron/check-odds` | Mondays 2 PM UTC | Fetches Cubs World Series and NL Central odds from Polymarket. Posts weekly update with deltas. Cross-posts to Twitter. |
+| `/api/cron/check-clinch` | Hourly | Watches the standings for clinch/elimination transitions. Fires only on an observed change between two snapshots — the first run of a season seeds state and posts nothing. |
+| `/api/cron/check-series-preview` | Every 15 min | Posts a postseason series preview once a matchup resolves. No-ops outside the postseason window. |
 
 ### Manual triggers
 
@@ -62,6 +66,8 @@ Vercel Cron
 | `/api/manual/post-game?gamePk=<id>&force=true` | Post a specific game. `force=true` skips dedup check. |
 | `/api/manual/post-news?url=<url>&title=<title>&force=true` | Post a specific news article. |
 | `/api/manual/post-odds?dry=true` | Trigger odds post. `dry=true` returns formatted text without posting. |
+| `/api/cron/check-clinch?dry=true` | Evaluate clinch state and render any pending cast without posting. |
+| `/api/cron/check-series-preview?dry=true` | Render a pending series preview without posting. |
 
 ### Utility
 
@@ -80,6 +86,8 @@ pages/api/
     check-games.ts       # Game monitor cron
     check-news.ts        # News monitor cron
     check-odds.ts        # Odds monitor cron
+    check-clinch.ts      # Clinch/elimination monitor cron
+    check-series-preview.ts # Postseason series preview cron
   manual/
     post-game.ts         # Manual game post
     post-news.ts         # Manual news post
@@ -89,6 +97,7 @@ pages/api/
 
 src/
   lib/
+    clinch.ts            # Clinch/elimination transition detection
     config.ts            # Constants, Redis keys/TTLs, thresholds
     mlb-api.ts           # MLB Stats API client (schedule, feed, content)
     neynar.ts            # Farcaster posting (Neynar SDK + FC Client API)
@@ -108,16 +117,61 @@ src/
 ### Game recap
 
 ```
-📋 Spring Training: Cubs beat Guardians 7-4 — FINAL
+⚾ FINAL: Cubs 3, Cardinals 0
 
-CHC  002 002 201  7R 15H 0E
-CLE  040 000 000  4R 8H 2E
+STL  000 000 000  0R 3H 0E
+CHC  000 003 00x  3R 6H 0E
 
-⚾ W: Jordan Wicks | L: Jack Leftwich | S: Mitchell Tyranski
+W: C. Holmes | L: M. Liberatore | S: J. Webb
 
-🏟️ Goodyear Ballpark
+⭐ C. Holmes 6.2 IP, 0 ER, 3 K, 1 BB · S. Suzuki 2-4, HR, 2B, 3 RBI
+
+📋 Record/streak/rank: 72-52 (0.581) / W1 / 2nd in NL Central (3.5 GB) / WC1 (+6.5)
 ```
 *+ native inline highlight video*
+
+The `WC{rank} ({games})` segment appears only after the All-Star break, and only
+when the Cubs do not lead the division. `+6.5` means 6.5 games **clear of the
+last wild card spot** — MLB measures this field against the cut line, not the
+leader — and `even` means level with it.
+
+In the postseason the standings footer is replaced by the series state:
+
+```
+⚾ Division Series FINAL: Cubs 6, Brewers 0
+
+MIL  000 000 000  0R 3H 1E
+CHC  300 001 11x  6R 10H 0E
+
+W: D. Palencia | L: F. Peralta
+
+⭐ K. Tucker 2-3, HR, RBI, 2 R · M. Boyd 4.2 IP, 0 ER, 6 K, 3 BB
+
+🏆 NLDS Game 4: Series tied 2-2
+```
+
+### Clinch
+
+```
+🎫 CLINCHED: Cubs are going to the postseason
+
+📋 Record/streak/rank: 88-64 (0.579) / W4 / 2nd in NL Central (5.0 GB) / WC1 (+10.0)
+🃏 Wild card berth — currently the 4 seed in the NL
+```
+
+### Series preview
+
+```
+🏆 NLDS: Cubs at Brewers
+
+📅 Game 1 — Sat, Oct 4, 1:08 PM CT (best-of-5)
+🏟️ American Family Field
+⚾ Probables: M. Boyd vs F. Peralta
+
+Season series: Cubs 7-6
+CHC 92-70 · 50-31 home · 3.79 ERA · 4.90 R/G
+MIL 97-65 · 52-29 home · 3.58 ERA · 4.98 R/G
+```
 
 ### News
 
@@ -155,6 +209,7 @@ Cubs News: Basallo ROY? Griffin 20/20? Here are 30 prospect predictions
 | `TWITTER_ACCESS_TOKEN` | No | |
 | `TWITTER_ACCESS_SECRET` | No | |
 | `POLYMARKET_REFERRAL` | No | Referral code appended to Polymarket URLs |
+| `ELIMINATION_CAST_ENABLED` | No | Set to `"true"` to allow elimination casts. Off by default. |
 
 ## Deduplication
 
@@ -165,6 +220,9 @@ All posting is deduplicated via Upstash Redis:
 | Game recap | `game:{gamePk}` | 30 days |
 | News article | `news:{guid}` | 7 days |
 | Odds update | `odds:posted` | 6 days |
+| Clinch state snapshot | `clinch:state:{season}` | 120 days |
+| Clinch cast | `clinch:posted:{season}:{event}` | 120 days |
+| Series preview | `series-preview:{gamePk}` | 60 days |
 | Highlight retry counter | `track:{gamePk}` | 24 hours |
 
 ## Development
@@ -185,7 +243,9 @@ Deployed on Vercel with cron jobs configured in `vercel.json`. Pushes to `main` 
   "crons": [
     { "path": "/api/cron/check-games", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/check-news", "schedule": "0 */2 * * *" },
-    { "path": "/api/cron/check-odds", "schedule": "0 14 * * 1" }
+    { "path": "/api/cron/check-odds", "schedule": "0 14 * * 1" },
+    { "path": "/api/cron/check-clinch", "schedule": "20 * * * *" },
+    { "path": "/api/cron/check-series-preview", "schedule": "*/15 * * * *" }
   ]
 }
 ```

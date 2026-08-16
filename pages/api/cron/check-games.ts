@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getSchedule, getGameFeed, getGameContent, getGameDates, getCubsStanding } from "../../../src/lib/mlb-api";
+import { getSchedule, getGameFeed, getGameContent, getGameDates, getCubsStanding, getSeasonDates } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
 import { uploadToFarcasterStream } from "../../../src/lib/video";
@@ -78,13 +78,26 @@ export default async function handler(
         continue;
       }
 
-      // Format and post
-      const standing = await getCubsStanding(feed.gameData.datetime.officialDate);
-      const text = formatBoxScoreCast(
-        feed,
-        game.gameNumber > 1 ? game.gameNumber : undefined,
-        standing
-      );
+      // Format and post. Standings only exist for regular-season dates; in the
+      // postseason the series state comes off the schedule row we already have,
+      // so no extra request is needed.
+      const officialDate = feed.gameData.datetime.officialDate;
+      const isRegularSeason = (feed.gameData.game?.type || "R") === "R";
+
+      const [standing, seasonDates] = isRegularSeason
+        ? await Promise.all([
+            getCubsStanding(officialDate),
+            getSeasonDates(officialDate.slice(0, 4)),
+          ])
+        : [null, null];
+
+      const text = formatBoxScoreCast(feed, {
+        gameNumber: game.gameNumber > 1 ? game.gameNumber : undefined,
+        standing,
+        seriesStatus: game.seriesStatus,
+        allStarDate: seasonDates?.allStarDate ?? seasonDates?.lastDate1stHalf,
+        officialDate,
+      });
 
       // Upload video to Farcaster Stream for native inline playback
       let finalUrls = mediaUrls;
