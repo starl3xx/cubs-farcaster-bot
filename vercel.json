@@ -11,6 +11,14 @@
     {
       "path": "/api/cron/check-odds",
       "schedule": "0 14 * * 1"
+    },
+    {
+      "path": "/api/cron/check-clinch",
+      "schedule": "20 * * * *"
+    },
+    {
+      "path": "/api/cron/check-series-preview",
+      "schedule": "*/15 * * * *"
     }
   ],
   "functions": {

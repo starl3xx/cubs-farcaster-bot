@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getGameFeed, getGameContent, getCubsStanding } from "../../../src/lib/mlb-api";
+import { getGameFeed, getGameContent, getCubsStanding, getSeasonDates, getSeriesStatusForGame } from "../../../src/lib/mlb-api";
 import { formatBoxScoreCast, extractMediaEmbeds } from "../../../src/lib/formatter";
 import { postToChannel } from "../../../src/lib/neynar";
 import { uploadToFarcasterStream } from "../../../src/lib/video";
@@ -35,8 +35,28 @@ export default async function handler(
     ]);
 
     const { embeds: mediaUrls, videoMp4Url } = extractMediaEmbeds(content);
-    const standing = await getCubsStanding(feed.gameData.datetime.officialDate);
-    const text = formatBoxScoreCast(feed, undefined, standing);
+
+    // Unlike the cron, this route has no schedule row in hand, so the series
+    // state needs its own lookup for postseason games.
+    const officialDate = feed.gameData.datetime.officialDate;
+    const isRegularSeason = (feed.gameData.game?.type || "R") === "R";
+
+    const [standing, seasonDates] = isRegularSeason
+      ? await Promise.all([
+          getCubsStanding(officialDate),
+          getSeasonDates(officialDate.slice(0, 4)),
+        ])
+      : [null, null];
+    const seriesStatus = isRegularSeason
+      ? null
+      : await getSeriesStatusForGame(gamePk, officialDate);
+
+    const text = formatBoxScoreCast(feed, {
+      standing,
+      seriesStatus,
+      allStarDate: seasonDates?.allStarDate ?? seasonDates?.lastDate1stHalf,
+      officialDate,
+    });
 
     // Upload video to Farcaster Stream for native inline playback
     let finalUrls = mediaUrls;
