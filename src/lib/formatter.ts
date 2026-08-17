@@ -5,9 +5,6 @@ import type {
   Playback,
   CubsStanding,
   SeriesStatus,
-  Boxscore,
-  BattingStats,
-  PitchingStats,
 } from "../types/mlb";
 import type { ClinchEvent } from "./clinch";
 import type { TeamSeasonSummary } from "./mlb-api";
@@ -104,9 +101,6 @@ export function formatBoxScoreCast(
   // Decisions line (no emoji prefix; first names abbreviated to first initial)
   const decisionsLine = formatDecisions(decisions);
 
-  // Top Cubs performers, computed over Cubs players only.
-  const starLine = formatStarPerformers(liveData.boxscore);
-
   // Footer. Explicitly allowlisted by game type rather than gated on whether
   // data happens to be present: standings return real records on spring dates
   // in Tokyo/Seoul-opener years, and seriesStatus is attached to EVERY game
@@ -124,7 +118,6 @@ export function formatBoxScoreCast(
 
   const parts = [headline, "", lineScore];
   if (decisionsLine) parts.push("", decisionsLine);
-  if (starLine) parts.push("", starLine);
   if (footerLine) parts.push("", footerLine);
 
   return parts.join("\n");
@@ -227,161 +220,6 @@ function formatDecisions(
   if (decisions.save) parts.push(`S: ${abbreviateName(decisions.save.fullName)}`);
 
   return parts.join(" | ");
-}
-
-// Minimum game score to earn a mention.
-const STAR_SCORE_FLOOR = 50;
-// Pitchers additionally need real workload: the base score alone clears the
-// floor after ~1.2 clean innings, which would hand a mop-up reliever equal
-// billing with a two-homer game.
-const STAR_PITCHER_MIN_OUTS = 12;
-// A save, win, or hold also counts as earning the mention.
-const DECISION_NOTE = /^\((W|S|H)/;
-
-interface StarCandidate {
-  score: number;
-  text: string;
-  tiebreak: number[];
-}
-
-/**
- * One line naming the best Cubs hitter and pitcher, e.g.
- * "⭐ C. Holmes 6.2 IP, 0 ER, 3 K, 1 BB · S. Suzuki 2-4, HR, 2B, 3 RBI"
- *
- * Deliberately does NOT read boxscore.topPerformers: that block is game-wide,
- * and contained zero Cubs in ~15% of games — including a 2025 NLDS game the
- * Cubs won, where all three listed performers were Brewers. The scores below
- * reproduce MLB's own formulas, so this computes the same ranking over the
- * Cubs half of the box score.
- *
- * Stat lines are built from integer fields rather than stats.*.summary, which
- * embeds a " | " that collides with the decisions separator, caps extras in a
- * way that hides real production, and lists strikeouts for hitters.
- */
-function formatStarPerformers(boxscore: Boxscore): string {
-  const side =
-    boxscore.teams.home.team.id === CUBS_TEAM_ID ? "home" : "away";
-  const players = boxscore.teams[side].players;
-  if (!players) return "";
-
-  const hitters: StarCandidate[] = [];
-  const pitchers: StarCandidate[] = [];
-
-  for (const player of Object.values(players)) {
-    const name = player.person?.fullName;
-    if (!name) continue;
-
-    const batting = player.stats?.batting;
-    if (batting && (batting.plateAppearances ?? 0) > 0) {
-      const score = hittingGameScore(batting);
-      if (score >= STAR_SCORE_FLOOR) {
-        hitters.push({
-          score,
-          text: `${abbreviateName(name)} ${formatHitterLine(batting)}`,
-          tiebreak: [batting.totalBases ?? 0, batting.rbi ?? 0, -player.person.id],
-        });
-      }
-    }
-
-    const pitching = player.stats?.pitching;
-    const outs = pitching?.outs ?? 0;
-    if (pitching && (outs > 0 || (pitching.battersFaced ?? 0) > 0)) {
-      const score = pitchingGameScore(pitching);
-      const earnedIt =
-        outs >= STAR_PITCHER_MIN_OUTS || DECISION_NOTE.test(pitching.note ?? "");
-      if (score >= STAR_SCORE_FLOOR && earnedIt) {
-        pitchers.push({
-          score,
-          text: `${abbreviateName(name)} ${formatPitcherLine(pitching)}`,
-          tiebreak: [outs, pitching.strikeOuts ?? 0, -player.person.id],
-        });
-      }
-    }
-  }
-
-  const best = [pickBest(hitters), pickBest(pitchers)].filter(
-    (c): c is StarCandidate => c != null
-  );
-  if (!best.length) return "";
-
-  // Lead with the bigger performance, whether he hit or pitched.
-  best.sort((a, b) => b.score - a.score);
-  return `⭐ ${best.map((c) => c.text).join(" · ")}`;
-}
-
-/** Deterministic pick — check-games retries the same game up to 12 times. */
-function pickBest(candidates: StarCandidate[]): StarCandidate | null {
-  if (!candidates.length) return null;
-  return candidates.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    for (let i = 0; i < a.tiebreak.length; i++) {
-      if (b.tiebreak[i] !== a.tiebreak[i]) return b.tiebreak[i] - a.tiebreak[i];
-    }
-    return 0;
-  })[0];
-}
-
-function hittingGameScore(b: BattingStats): number {
-  const walks = (b.baseOnBalls ?? 0) - (b.intentionalWalks ?? 0);
-  return (
-    42 +
-    4 * (b.hits ?? 0) +
-    2 * (b.totalBases ?? 0) +
-    2 * (b.rbi ?? 0) +
-    2 * (b.runs ?? 0) +
-    3 * walks +
-    3 * (b.hitByPitch ?? 0) +
-    2 * (b.stolenBases ?? 0) -
-    4 * (b.caughtStealing ?? 0) -
-    2 * (b.atBats ?? 0) -
-    2 * (b.sacFlies ?? 0)
-  );
-}
-
-/** Tango Game Score v2 — note it uses runs, not earned runs. */
-function pitchingGameScore(p: PitchingStats): number {
-  return (
-    40 +
-    2 * (p.outs ?? 0) +
-    (p.strikeOuts ?? 0) -
-    2 * (p.baseOnBalls ?? 0) -
-    2 * (p.hits ?? 0) -
-    3 * (p.runs ?? 0) -
-    6 * (p.homeRuns ?? 0)
-  );
-}
-
-/** "2-4, HR, 2B, 3 RBI" — up to three extras, strikeouts deliberately omitted. */
-function formatHitterLine(b: BattingStats): string {
-  const extras: string[] = [];
-  const add = (count: number, label: string) => {
-    if (count > 0) extras.push(count > 1 ? `${count} ${label}` : label);
-  };
-
-  add(b.homeRuns ?? 0, "HR");
-  add(b.triples ?? 0, "3B");
-  add(b.doubles ?? 0, "2B");
-  add(b.rbi ?? 0, "RBI");
-  add(b.runs ?? 0, "R");
-  // Display the official BB total. The score formula subtracts IBB, but the
-  // box score does not, and a bare "BB" label must match the box score.
-  add(b.baseOnBalls ?? 0, "BB");
-  add(b.stolenBases ?? 0, "SB");
-  add(b.hitByPitch ?? 0, "HBP");
-
-  const line = `${b.hits ?? 0}-${b.atBats ?? 0}`;
-  return extras.length ? `${line}, ${extras.slice(0, 3).join(", ")}` : line;
-}
-
-/** "6.2 IP, 0 ER, 3 K, 1 BB" */
-function formatPitcherLine(p: PitchingStats): string {
-  const parts = [
-    `${p.inningsPitched ?? "0.0"} IP`,
-    `${p.earnedRuns ?? 0} ER`,
-    `${p.strikeOuts ?? 0} K`,
-  ];
-  if ((p.baseOnBalls ?? 0) > 0) parts.push(`${p.baseOnBalls} BB`);
-  return parts.join(", ");
 }
 
 /**

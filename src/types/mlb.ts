@@ -212,49 +212,6 @@ export interface BoxscoreTeam {
       era: string;
     };
   };
-  /** Keyed by "ID{personId}". Bench players carry an EMPTY stats.batting object. */
-  players?: Record<string, BoxscorePlayer>;
-}
-
-export interface BoxscorePlayer {
-  person: { id: number; fullName: string };
-  stats?: {
-    batting?: BattingStats;
-    pitching?: PitchingStats;
-  };
-}
-
-/** Every field is optional — an unused bench player's `batting` is `{}`. */
-export interface BattingStats {
-  plateAppearances?: number;
-  atBats?: number;
-  hits?: number;
-  doubles?: number;
-  triples?: number;
-  homeRuns?: number;
-  rbi?: number;
-  runs?: number;
-  baseOnBalls?: number;
-  intentionalWalks?: number;
-  hitByPitch?: number;
-  stolenBases?: number;
-  caughtStealing?: number;
-  sacFlies?: number;
-  totalBases?: number;
-  strikeOuts?: number;
-}
-
-export interface PitchingStats {
-  inningsPitched?: string; // "6.2"
-  outs?: number;
-  battersFaced?: number;
-  hits?: number;
-  runs?: number;
-  earnedRuns?: number;
-  homeRuns?: number;
-  baseOnBalls?: number;
-  strikeOuts?: number;
-  note?: string; // "(W, 8-4)" / "(S, 12)" / "(H, 3)"
 }
 
 // Game content (highlights + editorial)

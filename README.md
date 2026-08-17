@@ -124,8 +124,6 @@ CHC  000 003 00x  3R 6H 0E
 
 W: C. Holmes | L: M. Liberatore | S: J. Webb
 
-⭐ C. Holmes 6.2 IP, 0 ER, 3 K, 1 BB · S. Suzuki 2-4, HR, 2B, 3 RBI
-
 📋 Record/streak/rank: 72-52 (0.581) / W1 / 2nd in NL Central (3.5 GB) / WC1 (+6.5)
 ```
 *+ native inline highlight video*
@@ -144,8 +142,6 @@ MIL  000 000 000  0R 3H 1E
 CHC  300 001 11x  6R 10H 0E
 
 W: D. Palencia | L: F. Peralta
-
-⭐ K. Tucker 2-3, HR, RBI, 2 R · M. Boyd 4.2 IP, 0 ER, 6 K, 3 BB
 
 🏆 NLDS Game 4: Series tied 2-2
 ```
